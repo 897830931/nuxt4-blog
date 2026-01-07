@@ -1,0 +1,20 @@
+
+
+@font-face {
+  font-family: "TsangerYuYang"; /* Project id 3642318 */
+  src: url('@/assets/font/TsangerYuYangT_W05_W05.ttf') format('woff2');
+  font-display: swap; /* 使用 swap 确保文本立即可见 */
+}
+
+
+@font-face {
+  font-family: "dianziqianxia"; /* Project id 3642318 */
+  src: url('@/assets/font/dianziqianxia.otf') format('woff2');
+  font-display: swap; /* 使用 swap 确保文本立即可见 */
+}
+@font-face {
+  font-family: "dianzikesong"; /* Project id 3642318 */
+  src: url('@/assets/font/dianzisong.ttf') format('woff2');
+  font-display: swap; /* 使用 swap 确保文本立即可见 */
+}
+

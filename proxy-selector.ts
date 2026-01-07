@@ -8,7 +8,7 @@ const rl = createInterface({
 
 const options = [
   { name: '本地后端', value: 'http://localhost:3001' },
-  { name: '测试服务器', value: 'https://kcst.bokeyun.com.cn' },
+  { name: '测试服务器', value: 'http://39.106.64.68:7002/pc' },
   { name: '正式服务器', value: 'https://api.prod.com' }
 ]
 

@@ -2,7 +2,6 @@
 import { fileURLToPath } from 'node:url'
 import { selectProxyTarget } from './proxy-selector'
 import { resolve } from 'path'
-import { defineEventHandler } from 'h3'
 let proxyUrl = 'https://kcst.bokeyun.com.cn' // 默认生产
 const isDev = process.env.NODE_ENV === 'development'
 if (isDev) {
@@ -14,6 +13,9 @@ export default defineNuxtConfig({
     devServer: {
         port: 8090,
     },
+    dir: {
+      app: 'app'
+    },
     compatibilityDate: '2025-11-18',
     // 这些键仅在服务器端可用 配置属性是响应式的
     runtimeConfig: {
@@ -22,27 +24,19 @@ export default defineNuxtConfig({
 
         // 公开给浏览器端（相当于旧的 publicRuntimeConfig）
         public: {
-            env: process.env.NODE_ENV === 'development' ? 'dev' : 'prod',
-            baseURL: '/api',
-            testUrl: process.env.TEST_URL ?? 'https://longquanyi.ifuhua.com.cn',
-            formalUrl: process.env.FORMAL_URL ?? 'https://shuangliu.boshiyun.com.cn',
-            aiProxy: 'bochaapi/aiServer',
-            customerService: 'http://kefu.bokeyun.com.cn/im/text/1qcox9.html',
-            appConfig: { name: '龙泉驿区科技创新服务平台', shortName: '科创生态', concat: '188-0506-5725' },
-            industryProjectId: '0',
-            apiSdkProxy: '/openapi',
-            isBrowser: typeof window !== 'undefined',
+           
         },
     },
     appConfig: {
-        name: '龙泉驿区科技创新服务平台',
-        shortName: '科创生态',
+        name: 'Pumpkin',
+        shortName: '',
         concat: '188-0506-5725',
     },
     app: {
         baseURL: '/',
         head: {
-            title: '科创生态服务平台',
+            title: 'Pumpkin',
+            titleTemplate: '%s | 897830931@qq.com',
             htmlAttrs: {
                 lang: 'en',
             },
@@ -56,12 +50,22 @@ export default defineNuxtConfig({
                 },
                 {
                     name: 'description',
-                    content: '科创生态服务平台, 提供科创生态服务, 包括但不限于: 项目管理, 项目合作, 项目评估, 项目咨询, 项目合作, 项目评估, 项目咨询.',
+                    content: 'Pumpkin,南瓜的博客',
                 },
             ],
-            link: [],
+            link: [
+                {
+                    rel: 'stylesheet',
+                    href: 'http://at.alicdn.com/t/c/font_4193444_4dau2nevev9.css',
+                }, // 换成你的 Iconfont 链接
+            ],
             style: [],
-            script: [],
+           script: [
+                {
+                    src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
+                    type: 'text/javascript',
+                },
+            ],
             noscript: [],
         },
         keepalive: true,
@@ -204,7 +208,7 @@ export default defineNuxtConfig({
     nitro: {
         // 开发服务端代理配置
         routeRules: {
-            '/api/**': { proxy: `${proxyUrl}/api/**` },
+            '/api/**': { proxy: `${proxyUrl}/pc/**`, },
         },
         // prerender 首页 + 常见页面（首屏更快）
         prerender: {
@@ -213,7 +217,7 @@ export default defineNuxtConfig({
         },
     },
     // 全局引入的css文件
-    css: ['@/styles/index.scss'],
+    css: [],
     // 根据不同环境配置通
     $development: {},
     $production: {
@@ -225,7 +229,7 @@ export default defineNuxtConfig({
         nitro: {
             // 开发服务端代理配置
             routeRules: {
-                '/api/**': { proxy: `${proxyUrl}/api/**` },
+                '/api/**': { proxy: `${proxyUrl}/pc/**` },
             },
         },
     },

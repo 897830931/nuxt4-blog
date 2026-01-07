@@ -1,9 +1,6 @@
 import type { SearchParameters } from 'ofetch'
 import { ElMessage } from 'element-plus'
 import { isFormData } from '@/utils/index'
-
-import { checkType } from 'utils/index'
-import { checkCaptcha } from 'components/tac/index.js'
 import md5 from 'md5'
 // utils/request.ts
 const isDev = import.meta.dev
@@ -132,64 +129,7 @@ export function handleResponseStatus(status: number, info: { code?: number; msg?
         // 业务错误码统一处理
         const businessError = () => {
             switch (info.code) {
-                case 599:
-                    ElMessage.error(msg || '未传递公共请求头')
-                    break
-                case 600:
-                    if (showTip) ElMessage.error(msg)
-                    break
-                case 601:
-                    ElMessage.error(msg || 'app_id无效或已禁用')
-                    break
-                case 602:
-                    ElMessage.error(msg || '签名校验错误')
-                    break
-                case 603:
-                    ElMessage.error(msg || '请求的接口超过调用次数')
-                    break
-                case 604:
-                    ElMessage.error(msg || '接口不存在或未开通权限')
-                    break
-                case 605:
-                    ElMessage.error(msg || '应用接口已被禁用')
-                    break
-                case 606:
-                    ElMessage.error(msg || '接口已废弃')
-                    break
-                case 607:
-                    // 验证码弹窗
-                    (checkCaptcha as any)({
-                        genCaptchaApi: '/api/genCaptcha?type=RANDOM',
-                        verifyCaptchaApi: '/api/verifyCapcha',
-                        verifyOtherParams: { rki: info.verifyCode },
-                        successCb: () => {
-                            setTimeout(() => window.location.reload(), 100)
-                        },
-                    })
-
-                    // 只提示一次
-                    const hasMessage = document.querySelector('.el-message')
-                    if (!hasMessage) {
-                        ElMessage.error('您的访问过于频繁，请协助我们进行验证！')
-                    }
-                    break
-                case 608:
-                    ElMessage.error(msg || '被禁止的IP或被其他风控策略拦截，禁止访问')
-                    break
-                case 609:
-                    ElMessage.error(msg || '查询参数错误，一般指参数类型传递错误')
-                    break
-                case 610:
-                    ElMessage.error(msg || 'API 请求方法错误')
-                    break
-                case 611:
-                    ElMessage.error(msg || '远程请求发生错误')
-                    break
-                default:
-                    if (showTip) {
-                        const tipMsg = checkType(showTip) === 'boolean' ? '很抱歉，无法连接到服务器，请检查您的网络连接并稍后再试。如果问题仍然存在，请联系管理员寻求帮助。' : showTip
-                        ElMessage.warning(tipMsg || '操作失败')
-                    }
+               
             }
         }
 
