@@ -1,0 +1,29 @@
+/* assets/css/transitions.css */
+/* nuxt.config.ts 中配置页面和布局的过渡动画 */
+
+/* ========== 1. Layout 过渡（layoutTransition） ========== */
+.layout-enter-active,
+.layout-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.layout-enter-from,
+.layout-leave-to {
+  opacity: 0;
+}
+
+/* ========== 2. Page 过渡（pageTransition） ========== */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* 可选：防止闪白 / 背景穿透 */
+html, body, #__nuxt {
+  background-color: #fff; /* 或你的主题色 */
+}

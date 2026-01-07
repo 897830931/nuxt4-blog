@@ -1,0 +1,163 @@
+/// _functions.scss
+/// 常用 Sass 函数集合
+/// 包含：单位转换、颜色处理、数学计算、响应式等
+/// @author YourName
+/// @group style-utils
+
+// ──────────────────────────────────────────────────
+// 1. 单位转换
+// ──────────────────────────────────────────────────
+
+/// px 转 rem（基于 16px 根字体）
+/// @param {Number} $px - 像素值
+/// @return {Number} rem 值
+@function rem($px) {
+  @return ($px / 16) * 1rem;
+}
+
+/// px 转 em（基于当前字体大小）
+/// @param {Number} $px - 像素值
+/// @param {Number} $base [$font-size-base] - 基准字体大小
+/// @return {Number} em 值
+@function em($px, $base: 16) {
+  @return ($px / $base) * 1em;
+}
+
+/// 百分比计算
+/// @param {Number} $part - 部分值
+/// @param {Number} $whole - 整体值
+/// @return {Number} 百分比
+@function percent($part, $whole) {
+  @return ($part / $whole) * 100%;
+}
+
+// ──────────────────────────────────────────────────
+// 2. 颜色处理
+// ──────────────────────────────────────────────────
+
+/// 调整颜色亮度
+/// @param {Color} $color - 基础色
+/// @param {Number} $percent - 调整百分比（正值变亮，负值变暗）
+/// @return {Color}
+
+@function tint($color, $percent) {
+  @return mix(white, $color, $percent);
+}
+
+/// 调整颜色暗度
+/// @param {Color} $color - 基础色
+/// @param {Number} $percent - 调整百分比
+/// @return {Color}
+
+@function shade($color, $percent) {
+  @return mix(black, $color, $percent);
+}
+
+/// 颜色透明度
+/// @param {Color} $color - 颜色
+/// @param {Number} $alpha - 透明度 0~1
+/// @return {Color}
+
+@function alpha($color, $alpha) {
+  @return rgba($color, $alpha);
+}
+
+/// 十六进制转 RGB
+// @param {String} $hex - #fff 或 #ffffff
+// @return {List} (r, g, b)
+@function hex-to-rgb($hex) {
+  $hex: str-slice($hex, 2);
+  @if str-length($hex) == 3 {
+    $hex: #{str-slice($hex, 1, 1)}#{str-slice($hex, 1, 1)}#{str-slice($hex, 2, 2)}#{str-slice($hex, 2, 2)}#{str-slice($hex, 3, 3)}#{str-slice($hex, 3, 3)};
+  }
+  @return (hex-to-dec(str-slice($hex, 1, 2)), hex-to-dec(str-slice($hex, 3, 4)), hex-to-dec(str-slice($hex, 5, 6)));
+}
+
+/// 十六进制字符转十进制（辅助函数）
+@function hex-to-dec($hex) {
+  $map: (
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+    'a': 10, 'b': 11, 'c': 12, 'd': 13, 'e': 14, 'f': 15,
+    'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15
+  );
+  @return map-get($map, str-slice($hex, 1, 1)) * 16 + map-get($map, str-slice($hex, 2, 2));
+}
+
+// ──────────────────────────────────────────────────
+// 3. 数学计算
+// ──────────────────────────────────────────────────
+
+// 取最小值
+// @param {Number} $a
+// @param {Number} $b
+// @return {Number}
+@function min($a, $b) {
+  @return if($a < $b, $a, $b);
+}
+
+// 取最大值
+// @param {Number} $a
+// @param {Number} $b
+// @return {Number}
+@function max($a, $b) {
+  @return if($a > $b, $a, $b);
+}
+
+//向上取整
+// @param {Number} $num
+// @return {Number}
+@function ceil($num) {
+  @return if($num == round($num), $num, round($num) + 1);
+}
+
+// ──────────────────────────────────────────────────
+// 4. 响应式 & 布局
+// ──────────────────────────────────────────────────
+
+// 流体排版（clamp）
+// @param {Number} $min - 最小字体大小（px）
+// @param {Number} $max - 最大字体大小（px）
+// @param {Number} $min-vw - 最小视口宽度（px）
+// @param {Number} $max-vw - 最大视口宽度（px）
+// @return {String} clamp() 表达式
+@function fluid-type($min, $max, $min-vw: 375, $max-vw: 1440) {
+  $slope: ($max - $min) / ($max-vw - $min-vw);
+  $base: $min - $slope * $min-vw;
+  @return clamp(#{$min}px, #{$base}px + #{$slope * 100}vw, #{$max}px);
+}
+
+// 容器宽度限制
+// @param {Number} $max-width - 最大宽度
+// @return {String}
+@function container($max-width: 1200) {
+  @return min(100%, rem($max-width));
+}
+
+// ──────────────────────────────────────────────────
+// 5. 字符串处理
+// ──────────────────────────────────────────────────
+
+// 字符串包含
+// @param {String} $haystack
+// @param {String} $needle
+// @return {Bool}
+@function str-contains($haystack, $needle) {
+  @return str-index($haystack, $needle) != null;
+}
+
+/// 驼峰转中划线
+/// @param {String} $str
+/// @return {String}
+
+@function camel-to-kebab($str) {
+  $result: '';
+  @for $i from 1 through str-length($str) {
+    $char: str-slice($str, $i, $i);
+    @if $char == str-slice(to-upper-case($char), 1, 1) and $i > 1 {
+      $result: $result + '-' + to-lower-case($char);
+    } @else {
+      $result: $result + to-lower-case($char);
+    }
+  }
+  @return $result;
+}

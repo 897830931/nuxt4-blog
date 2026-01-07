@@ -1,0 +1,206 @@
+@use "./theme.scss" as *;
+@use './mixin.scss' as *;
+@use "./font.scss" as *;
+@use "./transitions.scss" as *;
+@use "./function.scss" as *;
+@use "./element/index.scss" as *;
+* { box-sizing: border-box; padding: 0; margin: 0; }
+
+a {
+  text-decoration: none;
+  color: inherit;
+  background-color: transparent;
+}
+
+a, button {
+  cursor: pointer;
+}
+
+ul, li {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  border: none;
+  display: inline-block;
+}
+
+.fl {
+  float: left;
+}
+
+.fr {
+  float: right;
+}
+
+.clear { clear: both;}
+
+.clearfix:after {
+  content:'';
+  display: block;
+  clear: both;
+}
+
+/* flex布局 */
+.flex { display: flex; flex-wrap: wrap; }
+.fwrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+.fnowrap {display: flex; flex-wrap: nowrap; }
+.f1 { flex: 1; }
+.f2 { flex: 2; }
+.f3 { flex: 3; }
+/* 垂直居中 */
+.fvertical { display: flex; align-items: center; }
+/* 水平居中 */
+.fcenter { display: flex; justify-content: center; }
+/* 水平+垂直居中 */
+.fcc { display: flex; align-items: center; justify-content: center; }
+/* 两端对齐+垂直居中 */
+.fbc { display: flex; align-items: center; justify-content: space-between; }
+/* 右对齐 */
+.fright {display: flex; flex-direction: row; justify-content: flex-end; }
+/* 两端对齐 */
+.fbetween { display: flex; justify-content: space-between; }
+/* 靠底部对齐 */
+.fbottom { display: flex; align-items: flex-end; }
+
+/* 上下对齐 */
+.fbetcenter{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* 两端上下对齐 */
+.fallcenter{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 溢出...显示 当前节点生效 */
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 溢出...显示 子节点生效 */
+.ellipsis_1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+.ellipsis_2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ellipsis_3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+
+// 日期选择样式有问题，不会自适应中间文字宽度，这里给一个合适的最小宽度
+.el-date-editor .el-range-separator {
+  min-width: 9%;
+}
+
+.is-click-able{
+  cursor: pointer;
+}
+
+/* 动画列表item */
+.move-scale-item { transition: .24s all; }
+/* 列表动画 */
+.move-scale-leave-active {
+  opacity: 0;
+  transform: scale(0.5, 0.5);
+}
+.move-scale-enter {
+  opacity: 0;
+  transform: scale(0.5, 0.5);
+}
+
+// 上下左右 内外边距，10、20、30、40、50、60
+@for $index from 1 through 6 {
+  .mgl_#{$index}0 {
+    margin-left: 10px * $index;
+  }
+  .mgr_#{$index}0 {
+    margin-right: 10px * $index;
+  }
+  .mgt_#{$index}0 {
+    margin-top: 10px * $index;
+  }
+  .mgb_#{$index}0 {
+    margin-bottom: 10px * $index;
+  }
+
+  .pdl_#{$index}0 {
+    padding-left: 10px * $index;
+  }
+  .pdr_#{$index}0 {
+    padding-right: 10px * $index;
+  }
+  .pdt_#{$index}0 {
+    padding-top: 10px * $index;
+  }
+  .pdb_#{$index}0 {
+    padding-bottom: 10px * $index;
+  }
+}
+
+.content-wrap {
+  width: 1200px;
+  margin: 0 auto;
+}
+
+// 全局监听的图片加载状态样式
+.default-img {
+  display: inline-block;
+  position: relative;
+  background-color: #f5f7fa;
+  object-fit: cover;
+  &::after {
+    content: "加载中";
+    font-size: 14px;
+    color: #c0c4cc;
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+  }
+}
+
+.error-img-default {
+  &::after {
+    content: "加载失败";
+  }
+}
+
+// 垂直居中布局，flex有些低版本浏览器不兼容，设置 vertical-box 时不能给浮动
+.vertical-box {
+  display: table-cell;
+  vertical-align: middle;
+  .vertical-item {
+    display: inline-block;
+    vertical-align: middle;
+  }
+}
+
+
+
+.flex-center{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.flex-start {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.amap-logo {
+  display: none !important;
+  visibility: hidden !important;
+}
+.amap-copyright {
+  display: none !important;
+  visibility: hidden !important;
+}
