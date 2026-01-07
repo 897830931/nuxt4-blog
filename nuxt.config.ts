@@ -208,7 +208,7 @@ export default defineNuxtConfig({
     nitro: {
         // 开发服务端代理配置
         routeRules: {
-            '/api/**': { proxy: `${proxyUrl}/pc/**`, },
+            '/api/**': { proxy: `${proxyUrl}/**` },
         },
         // prerender 首页 + 常见页面（首屏更快）
         prerender: {
@@ -217,7 +217,7 @@ export default defineNuxtConfig({
         },
     },
     // 全局引入的css文件
-    css: [],
+    css: ['element-plus/dist/index.css','@/assets/css/global.css'],
     // 根据不同环境配置通
     $development: {},
     $production: {
@@ -229,7 +229,7 @@ export default defineNuxtConfig({
         nitro: {
             // 开发服务端代理配置
             routeRules: {
-                '/api/**': { proxy: `${proxyUrl}/pc/**` },
+                '/api/**': { proxy: `${proxyUrl}/**` },
             },
         },
     },

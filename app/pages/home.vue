@@ -24,12 +24,14 @@ onMounted(() => {
 
 </script>
 <template>
-  <ClientOnly>
-    <div class="main px-2 py-1">
-      <div class="atricle-list grid grid-cols-1 gap-1">
-        <Article :info="item" v-for="item in list" :key="item.id" />
+  <div>
+    <ClientOnly>
+      <div class="main px-2 py-1">
+        <div class="atricle-list grid grid-cols-1 gap-1">
+          <Article :info="item" v-for="item in list" :key="item.id" />
+        </div>
       </div>
-    </div>
-  </ClientOnly>
+    </ClientOnly>
+  </div>
 </template>
 <style lang="scss" scoped></style>
