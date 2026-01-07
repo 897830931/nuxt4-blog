@@ -25,6 +25,7 @@
     "os": "^0.1.2",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
+    "pnpm": "^10.27.0",
     "sass": "^1.93.3",
     "swiper": "^8.4.7",
     "vue": "^3.5.22",
