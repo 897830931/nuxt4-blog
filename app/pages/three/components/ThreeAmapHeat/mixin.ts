@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { addEventOnResize } from '@/utils/index'
 import { getDicApiGeoByAreaCode } from '@/api/common'
-import guangdongJson from '@/public/Json/three/shandong.json'
+import guangdongJson from '@/assets/Json/three/shandong.json'
 import ThreeMap from './ThreeMap'
 import { markRaw } from 'vue'
 import heatData from './heatData'

@@ -365,6 +365,7 @@ const BaseMixins = {
         initThreeMap(features) {
             const zoom = this.mapObject.getZoom()
             if (!this.gllayer) {
+            
                 this.gllayer = new AMap.GLCustomLayer({
                     zIndex: 100,
                     init: (gl) => {

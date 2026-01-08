@@ -98,8 +98,9 @@ const getCategoryColor = (category: string) => {
       <!-- 图片加载 loading 效果 -->
       <div v-if="showCover" class="w-full aspect-[4/3] md:max-h-[360px] rounded-md relative">
         <!-- 图片 -->
-
-        <img v-lazy:loading1 :data-src="info.cover + '?t=' + Math.floor(Math.random() * 100000) " alt="文章封面" class="object-fill w-full aspect-[3/2] max-h-full ">
+        <client-only>
+          <img v-lazy:loading1 :data-src="info.cover + '?t=' + Math.floor(Math.random() * 100000) " alt="文章封面" class="object-fill w-full aspect-[3/2] max-h-full ">
+        </client-only>
       </div>
       <!-- 文章信息 -->
       <div class="flex justify-between">

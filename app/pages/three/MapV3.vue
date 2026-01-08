@@ -12,7 +12,6 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import GaodeMap from './components/ThreeAmap/index.vue'
 import DemoWrap from '@/components/DemoWrap/index.vue'
 definePageMeta({

@@ -1,4 +1,4 @@
-import { httpClient } from '@/composables/httpClient'
+import { request } from '@/utils/request'
 
 // 阿里云获取地图json
 export const getDicApiGeoByAreaCode = async (params: any) => {
@@ -7,10 +7,11 @@ export const getDicApiGeoByAreaCode = async (params: any) => {
     if (String(params.id).slice(-1) != 0) {
         allString = params.id
     }
-    return httpClient.get(`/mapJson`, {
-        params,
-        headers: {
+    return request(`/pc/mapJson`,'get', params,{
+           headers: {
             Referer: 'https://geo.datav.aliyun.com/',
-        },
-    })
+          },
+        }
+       
+    )
 }

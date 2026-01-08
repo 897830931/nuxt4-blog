@@ -12,7 +12,7 @@ import {
     EffectComposer,
     RenderPass,
 } from 'three-stdlib'
-import fontData from '@/public/Json/three/font.json'
+import fontData from '@/assets/Json/three/font.json'
 type CreateTooltipElement = (
     name: string,
     newPos: THREE.Vector3,

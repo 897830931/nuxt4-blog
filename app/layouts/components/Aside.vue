@@ -38,7 +38,9 @@
 
             </el-collapse>
         </div>
-        <Aplayer />
+        <client-only>
+            <Aplayer />
+        </client-only>
 
         <div class="p-2 flex justify-between text-left">
             <span> {{ date }}</span> <span>距离<span class="text-sky-600">{{ countdown.name }}

@@ -14,7 +14,7 @@ import {
     EffectComposer,
     RenderPass,
 } from 'three-stdlib'
-import fontData from '@/public/Json/three/font.json'
+import fontData from '@/assets/Json/three/font.json'
 function debounce(fn, delay) {
     let timer = null
     return function (...args) {

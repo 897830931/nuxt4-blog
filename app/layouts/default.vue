@@ -1,5 +1,5 @@
 <template>
-  <client-only>
+  <div>
     <div
       class="grid min-h-screen grid-cols-[auto,1fr] gap-2 grid-rows-[1fr,auto] md:grid-rows-[auto,1fr,auto] md:grid-cols-1">
       <div class="md:bg-[rgba(168,198,215,0.9)] h-fit sticky top-0 z-50">
@@ -28,7 +28,7 @@
       <img src="/img/myIcon1.svg" class="md:w-1/5" />
       <img src="/img/myIcon2.svg" class="w-1/5 hidden md:block">
     </div>
-  </client-only>
+  </div>
 
 </template>
 

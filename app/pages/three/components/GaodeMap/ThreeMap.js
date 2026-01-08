@@ -8,7 +8,7 @@ import {
     FontLoader,
     TextGeometry,
 } from 'three-stdlib'
-import fontData from '@/public/Json/three/font.json'
+import fontData from '@/assets/Json/three/font.json'
 
 export default class ThreeMap {
     constructor({ dom, gl, zoom = 9, customCoords, config, renderedFun }) {

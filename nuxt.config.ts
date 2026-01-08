@@ -2,13 +2,13 @@
 import { fileURLToPath } from 'node:url'
 import { selectProxyTarget } from './proxy-selector'
 import { resolve } from 'path'
-let proxyUrl = 'https://kcst.bokeyun.com.cn' // 默认生产
-const isDev = process.env.NODE_ENV === 'development'
-if (isDev) {
-    // 动态注入：启动时选择
-    // @ts-ignore - 允许同步等待
-    proxyUrl = await selectProxyTarget()
-}
+let proxyUrl = 'http://39.106.64.68:7002' // 默认生产
+// const isDev = process.env.NODE_ENV === 'development'
+// if (isDev) {
+//     // 动态注入：启动时选择
+//     // @ts-ignore - 允许同步等待
+//     proxyUrl = await selectProxyTarget()
+// }
 export default defineNuxtConfig({
     devServer: {
         port: 8090,
@@ -61,8 +61,12 @@ export default defineNuxtConfig({
             ],
             style: [],
            script: [
-                {
+                  {
                     src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
+                    type: 'text/javascript',
+                },
+                {
+                    src: '/js/heatmap.js',
                     type: 'text/javascript',
                 },
             ],
