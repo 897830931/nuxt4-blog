@@ -5,3 +5,10 @@ declare module '#app' {
     $three: typeof THREE;
   }
 }
+
+declare module 'heatmap.js' {
+  const h337: {
+    create: (config: any) => any
+  }
+  export default h337
+}

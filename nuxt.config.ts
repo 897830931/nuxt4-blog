@@ -60,16 +60,16 @@ export default defineNuxtConfig({
                 }, // 换成你的 Iconfont 链接
             ],
             style: [],
-           script: [
+            script: [
+                    {
+                      src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
+                      type: 'text/javascript',
+                  },
                   {
-                    src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
-                    type: 'text/javascript',
-                },
-                {
-                    src: '/js/heatmap.js',
-                    type: 'text/javascript',
-                },
-            ],
+                      src: '/js/heatmap.js',
+                      type: 'text/javascript',
+                  },
+              ],
             noscript: [],
         },
         keepalive: true,

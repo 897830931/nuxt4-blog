@@ -10,14 +10,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { Back } from '@element-plus/icons-vue'
+
 const router = useRouter();
 const handleBack = () => {
-    router.back();
+    router.go(-1);
 };
-// Component logic
 </script>
 
 <style lang="scss" scoped>

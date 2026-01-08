@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import gsap from 'gsap'
 import {
     Line2,
     LineMaterial,
@@ -7,33 +8,34 @@ import {
     CSS2DObject,
     FontLoader,
     TextGeometry,
-    FXAAShader,
-    ShaderPass,
-    EffectComposer,
-    RenderPass,
+
 } from 'three-stdlib'
+// 高德地图和three共享gl无法使用后处理
 import fontData from '@/assets/Json/three/font.json'
-type CreateTooltipElement = (
-    name: string,
-    newPos: THREE.Vector3,
-    obj: any
-) => HTMLElement
-type CreateLabelElement = (properties: object) => HTMLElement
-type configType = {
+import h337 from 'heatmap.js'
+
+type CreateTooltipElement = (properties: any) => HTMLElement
+type CreateLabelElement = (properties: any) => HTMLElement
+type ThreeMapConfig = {
     idKey?: string
     cpKey?: string
-    showTooltip?: boolean //是否显示提示信息
-    labelType?: string //区域标题展示类型 2d 3d
-    labelHoverColor?: string //区域标题悬浮颜色
-    areaHoverColor?: string //区域悬浮颜色
-    createTooltipElement?: CreateTooltipElement //创建提示信息元素
-    createLabelElement?: CreateLabelElement //创建label元素
-    lineColor?: string //线颜色
-    lineWidth?: number //线宽
+    hoverHeight?: boolean
+    showTooltip?: boolean
+    showLabel?: boolean
+    labelType?: string
+    labelHoverColor?: string
+    areaHoverColor?: string
+    createTooltipElement?: CreateTooltipElement | null
+    createLabelElement?: CreateLabelElement | null
+    lineColor?: string
+    lineWidth?: number
+    areaColor?: string
+    tooltipHeight?: number
 }
+
 interface HeatPoint {
-    lat: number
     lng: number
+    lat: number
     value: number
 }
 
@@ -41,75 +43,95 @@ interface HeatData {
     max: number
     data: HeatPoint[]
 }
+
 interface HeatConfig {
     radius?: number
     maxOpacity?: number
     minOpacity?: number
     blur?: number
-    gradient?: { [key: string]: string }
+    gradient?: Record<string, string>
 }
+
+type ThreeMapConstructorParams = {
+    dom: HTMLElement
+    gl: WebGLRenderingContext
+    zoom?: number
+    customCoords: any
+    config?: ThreeMapConfig
+    renderedFun?: () => void
+}
+
 export default class ThreeMap {
-    config: configType
-    dom: HTMLCanvasElement
-    domRect: DOMRect
+    config: ThreeMapConfig
+    _tweens: any[]
+    flightGroup: THREE.Group
+    BarsGroup: THREE.Group
+    _barLabel2D: any[]
+    dom: HTMLElement
+    domRect: DOMRect | null
     tooltip: any
     innerWidth: number
     innerHeight: number
-    renderedFun: Function
-    camera: THREE.PerspectiveCamera
-    renderer: THREE.WebGLRenderer
-    scene: THREE.Scene
-    textLabels: Array<THREE.Mesh>
-    cachedMeshes: Array<any>
-    customCoords: any
+    _heatmapMesh: any
+    renderedFun: (() => void) | null
+    camera: any
+    renderer: any
+    scene: any
+    textLabels: any[]
+    cachedMeshes: any[]
     CSS2DLayer: any
     css2DGroup: any
-    textMeshGroup: any
+    textMeshGroup: any[]
+    customCoords: any
     depth: number
     raycaster: THREE.Raycaster
     mouse: THREE.Vector2
-    hoveredMesh: THREE.Mesh
-    hoveredText: THREE.Mesh
+    hoveredMesh: any
+    hoveredText: any
     hoverId: string
-    sence: any
-    dataFlowIntervals: any[]
-    dataSpherePool: any[]
-    /**
-     * 构造函数
-     * @param {Object} param0 参数对象，包含以下属性：
-     *    - dom: 地图容器 DOM 元素
-     *    - gl: AMap 提供的 WebGL 上下文
-     *    - zoom: 地图缩放级别（默认 9）
-     *    - customCoords: 自定义坐标转换工具，用于将经纬度转换为 Three.js 坐标 这个是高德地图的坐标转换工具
-     *    - config: 配置对象，包含 idKey（地图块 id 字段）和 cpKey（中心点字段）等
-     *    - renderedFun: 每次渲染时执行的回调函数
-     *    - showTooltip: 是否显示提示信息
-     */
-    constructor({ dom, gl, zoom = 9, customCoords, config, renderedFun }) {
-        // 合并传入的配置和默认配置
-        this.config = {
-            idKey: 'id',
-            cpKey: 'cp',
-            showTooltip: true, // 是否显示提示信息
-            labelType: '2d', //区域标题展示类型 2d 3d
-            labelHoverColor: '#ffff00', //区域标题悬浮颜色
-            areaHoverColor: '#2A95B5', //区域悬浮颜色
-            createTooltipElement: null, //创建提示信息元素,
-            createLabelElement: null, //创建label元素,
-            lineColor: '#87cefa', //线颜色
-            lineWidth: 1, //线宽
-            ...config,
-        }
 
+    constructor({
+        dom,
+        gl,
+        zoom = 9,
+        customCoords,
+        config,
+        renderedFun,
+    }: ThreeMapConstructorParams) {
+        // 合并传入的配置和默认配置
+        this.config = Object.assign(
+            {
+                idKey: 'id',
+                cpKey: 'cp',
+                hoverHeight: false, // 是否显式高度过渡
+                showTooltip: true, // 是否显示提示信息
+                showLabel: true, // 是否显示区域标题
+                labelType: '2d', // 区域标题展示类型 2d 3d
+                labelHoverColor: '#ffff00', // 区域标题悬浮颜色
+                areaHoverColor: '#ff0000', // 区域悬浮颜色
+                createTooltipElement: null, // 创建提示信息元素 返回一个dom元素 参数是区块数据
+                createLabelElement: null, // 创建区域标题元素 返回一个dom元素 参数是区块数据
+                lineColor: '#87cefa', //线颜色
+                lineWidth: 1, //线宽
+                areaColor: 'rgb(124, 205, 230, 0.8)', //区域颜色
+                tooltipHeight:3.5
+            },
+            config
+        )
+        this._tweens = [];//所有动画
+        this.flightGroup = new THREE.Group()//飞线组
+        this.BarsGroup = new THREE.Group()//柱状图组
+        this._barLabel2D = [];
         this.dom = dom // 地图容器 DOM 元素
         this.domRect = null // 存储 DOM 元素的尺寸信息
         this.tooltip = null // 用于显示提示信息的 DOM 元素
         this.innerWidth = 0 // DOM 宽度
         this.innerHeight = 0 // DOM 高度
+        this._heatmapMesh = null // 热力图实例
         this.setDomRect() // 初始化 DOM 尺寸
 
         // 初始化属性（稍后赋值）
-        this.renderedFun = renderedFun || null
+        this.renderedFun = renderedFun || null //地图渲染器
         this.camera = null // Three.js 相机对象
         this.renderer = null // Three.js 渲染器
         this.scene = null // Three.js 场景
@@ -122,7 +144,7 @@ export default class ThreeMap {
         this.customCoords = customCoords
 
         // 地图块挤出深度
-        this.depth = 1
+        this.depth = 0.2
         this.setDepth(zoom) // 根据 zoom 动态设置深度
 
         // 初始化射线检测相关属性，用于鼠标交互
@@ -136,182 +158,148 @@ export default class ThreeMap {
         // 启动动画循环
         this.animation()
     }
+    
 
-    /**
-     * 获取 DOM 容器的尺寸，并更新 innerWidth 和 innerHeight
-     */
     setDomRect() {
         this.domRect = this.dom.getBoundingClientRect()
         this.innerWidth = this.domRect.width
         this.innerHeight = this.domRect.height
     }
 
-    /**
-     * 动画循环方法
-     * 使用 requestAnimationFrame 循环调用自身，
-     * 每帧渲染场景并调用外部渲染回调
-     */
     animation() {
-        requestAnimationFrame(() => this.animation()) // 调度下一帧
-        if (this.renderer) {
-            this.renderer.render(this.scene, this.camera)
-        }
-        // 调用外部传入的渲染回调
-        if (this.renderedFun) {
-            this.renderedFun()
-        }
+      requestAnimationFrame(() => this.animation());
+      // 1）先画高德地图
+      this.renderedFun?.();
+      if(this.renderer.clearDepth){
+        this.renderer.clearDepth();
+      }
+      this.renderer.render(this.scene, this.camera); 
+     
+      // 4）叠加 2D 层
+      this.CSS2DLayer?.setSize(this.innerWidth, this.innerHeight);
+      this.CSS2DLayer?.render(this.scene, this.camera);
+     
     }
 
-    /**
-     * 初始化 Three.js 的基本元素：相机、渲染器、场景、光照
-     * @param {WebGLRenderingContext} gl - AMap 提供的 WebGL 上下文
-     */
     init(gl) {
-        // 创建透视相机，视场角 60 度，近平面 100，远平面 1<<30
+        // 创建透视相机
         this.camera = new THREE.PerspectiveCamera(
-            60, // 视场角
-            this.innerWidth / this.innerHeight, // 宽高比
-            100, // 近平面
-            1 << 30 // 远平面
+            60,
+            this.innerWidth / this.innerHeight,
+            100,
+            1 << 30
         )
-        // 使用传入的 gl 上下文创建 WebGLRenderer
         this.renderer = new THREE.WebGLRenderer({
             context: gl,
+            // alpha: true,             // 关键：启用透明背景
+            // preserveDrawingBuffer: true,
         })
-        this.renderer.autoClear = false // 不自动清除，便于多层渲染
-        // 创建场景
+        this.renderer.autoClear = false
+        this.renderer.toneMapping = THREE.LinearToneMapping;
+        this.renderer.toneMappingExposure = 1.0;
+        this.renderer.physicallyCorrectLights = false; // 开启物理正确光照
         this.scene = new THREE.Scene()
-        // 添加光照
         this.initLight()
+        this.creatCss2DLayer()
+        this.initCss2DGroup()
     }
-
-    /**
-     * 添加环境光和方向光到场景中
-     */
+    // 初始化相机位置
+    initCamera() {
+        this.camera.position.set(0, 0, 0)
+    }
     initLight() {
-        var aLight = new THREE.AmbientLight(0xffffff, 0.3) // 环境光，柔和照明
-        var dLight = new THREE.DirectionalLight(0xffffff, 1) // 方向光，产生阴影效果,平行光
-        // 创建聚光灯光源
-        // const spotLight = new THREE.SpotLight(0xffffff)
-        // spotLight.position.set(10, 200, this.depth * 3) // 设置光源的位置
-        // spotLight.angle = Math.PI / 6
-        // 设置目标位置
-        // spotLight.target.position.set(100, 0, 0)
-
-        this.initLightPosition(dLight) // 设置方向光的位置
+        var aLight = new THREE.AmbientLight(0xffffff, 0.3)
+        var dLight = new THREE.DirectionalLight(0xffffff, 1)
+        // 开启阴影，如果有物理发光就会显示在这个阴影上
+        dLight.castShadow = false;
+        this.initLightPosition(dLight)
         this.scene.add(dLight)
         this.scene.add(aLight)
-        // this.scene.add(spotLight)
     }
+ 
 
-    /**
-     * 初始化方向光的位置
-     * @param {THREE.DirectionalLight} dLight - 方向光对象
-     */
+    // 初始化相机位置
     initLightPosition(dLight) {
-        dLight.position.set(1000, -100, 900)
+        dLight.position.set(1000, 100, 900)
     }
-
-    /**
-     * 根据地图缩放级别 zoom 动态设置地图块的挤出深度
-     * @param {number} zoom - 地图缩放级别
-     */
+    // 根据缩放级别设置地图块的深度
     setDepth(zoom) {
-        // 公式：根据基准高度、目标缩放级别和缩放范围计算深度
-        const baseHeight = 25000 // 基础高度（zoom 8 时的高度）
+        const baseHeight = 30000 // 基础高度（zoom 8 时的高度）
         const targetZoom = 8 // 目标缩放级别
         const zoomRange = 1.5 // zoom 6 到 8 的差值
         const depth = baseHeight * Math.pow(2, (targetZoom - zoom) / zoomRange)
         this.depth = depth
     }
-    /**
-     * 渲染方法，在每帧更新时调用
-     */
+
     render() {
-        // 更新所有线宽材质的分辨率，以适应容器尺寸变化
         const lineObject = this.scene.children
             .filter((item) => item.type === 'Object3D' && item.children.length)
             .map((item) => item.children[1])
-        lineObject
             .filter((item) => item)
-            .forEach((line: any) => {
-                if (line.material && line.material.resolution) {
-                    line.material.resolution.set(
-                        this.innerWidth,
-                        this.innerHeight
-                    )
-                }
-            })
-
-        // 同步相机参数，从自定义坐标转换工具获取
-       
+        lineObject.forEach((line) => {
+            if (line.material && line.material.resolution) {
+                line.material.resolution.set(this.innerWidth, this.innerHeight)
+            }
+        })
         this.renderer.resetState()
-        var { near, far, fov, up, lookAt, position } =
-            this.customCoords.getCameraParams() as any
+        // 高德地图相机同步到3d场景中
+        var { near, far, fov, up, lookAt, position } =this.customCoords.getCameraParams()
         this.camera.near = near
         this.camera.far = far
         this.camera.fov = fov
-         // @ts-ignore
         this.camera.position.set(...position)
-         // @ts-ignore
         this.camera.up.set(...up)
-         // @ts-ignore
         this.camera.lookAt(...lookAt)
         this.camera.updateProjectionMatrix()
 
-        // 渲染场景到 WebGL 渲染器
         this.renderer.render(this.scene, this.camera)
 
-        // 渲染 CSS2D 标签层
         if (this.CSS2DLayer) {
             this.CSS2DLayer.render(this.scene, this.camera)
-            // 同步更新渲染器尺寸（注意不要误用除法，这里只是单纯调用 setSize）
             this.CSS2DLayer.setSize(this.innerWidth, this.innerHeight)
         }
 
         this.renderer.resetState()
     }
 
-    /**
-     * 初始化鼠标射线检测
-     * 根据事件对象计算鼠标在 Three.js 坐标系中的位置，并设置射线检测
-     * @param {MouseEvent} event
-     * @returns {Intersection|null} 返回第一个相交的对象信息
-     */
     initRay(event) {
-        // 使用 DOM 矩形计算鼠标在画布内的相对位置
-        const rect = this.domRect
-        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-        // 设置射线检测
-        this.raycaster.setFromCamera(this.mouse, this.camera)
-        const intersects = this.raycaster.intersectObjects(this.cachedMeshes)
-        return intersects && intersects.length > 0 ? intersects[0] : null
+        // 获取地图容器 DOM 元素的尺寸信息
+        const rect = this.domRect;
+        // 将鼠标的 x 坐标转换为标准化设备坐标（NDC），范围为 -1 到 1
+        // 先计算鼠标相对于地图容器左边界的偏移量，再除以容器宽度，乘以 2 后减 1
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        // 将鼠标的 y 坐标转换为标准化设备坐标（NDC），范围为 -1 到 1
+        // 先计算鼠标相对于地图容器上边界的偏移量，再除以容器高度，乘以 2 后取反加 1
+        // 因为在 NDC 中，y 轴正方向朝上，而鼠标坐标 y 轴正方向朝下
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        // 根据鼠标的标准化设备坐标和相机，设置射线发射器的起始位置和方向
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        // 执行射线检测，检测射线与 cachedMeshes 数组中的网格对象的相交情况
+        // 返回一个包含所有相交结果的数组，按距离相机由近到远排序
+        const intersects = this.raycaster.intersectObjects(this.cachedMeshes);
+        // 如果存在相交结果，返回第一个相交结果（距离相机最近的对象）
+        // 否则返回 null
+        return intersects && intersects.length > 0 ? intersects[0] : null;
     }
-    // 当场景中区域或 Mesh 改变时，调用该方法更新缓存
+    // 更新缓存的网格对象
     updateMeshCache() {
         this.cachedMeshes = this.scene.children
-            .filter((item:any) => item.isProvince)
+            .filter((item) => item.isProvince)
             .map((item) => item.children)
             .flat()
             .filter((item) => item.type === 'Mesh')
     }
-    /**
-     * 初始化区域数据：根据 GeoJSON features 创建地图块，并添加文字标签
-     * @param {Object} features GeoJSON 数据中的 features 数组
-     */
+
     initArea(features) {
-        // 先对 features 进行过滤处理，过滤无效坐标和小面积区域
-        let mapJson = this.filterFeatures(features, 0.01)
+        // 计算区域的面机，过滤掉面机小于指定阈值的区域
+        let mapJson = this.filterFeatures(features, 0.005)
         features.forEach((feature) => {
-            const province = new THREE.Group() as any // 每个区域使用一个 Group 进行管理
+            const province = new THREE.Group()
             const coordinates = feature.geometry.coordinates
             coordinates.forEach((coordinate) => {
                 coordinate.forEach((item) => {
-                    // 转换坐标（使用自定义工具）
                     const coords = this.customCoords.lngLatsToCoords(item)
                     const vertices = []
-                    // 创建二维形状
                     const shape = new THREE.Shape()
                     coords.forEach((coord, index) => {
                         if (index === 0) {
@@ -321,24 +309,15 @@ export default class ThreeMap {
                             vertices.push(coord[0], coord[1], this.depth + 1)
                         }
                     })
-                    // 创建地图块 Mesh
-                    const mesh = this.createMesh(shape) as any
-                    // 将 feature 属性挂载到 mesh 上
+                    const mesh = this.createMesh(shape)
                     mesh.properties = feature.properties
-                    // 创建轮廓线
                     const line = this.createLine(vertices)
-                    // 将地图块和轮廓线加入区域 Group
                     province.add(mesh, line)
                 })
             })
-            // 设置当前地区的参数
             province.properties = feature.properties
-            // 使用地图数据提供的中心 则打开注释
-            // let provinceCenter = province.properties[this.config.cpKey]
-            // 使用计算的重心坐标 更精确
             let provinceCenter = null
             if (provinceCenter && provinceCenter.length) {
-                // 如果有指定中心点，则转换为三维坐标
                 let newCenter =
                     this.customCoords.lngLatsToCoords(provinceCenter)[0]
                 provinceCenter = new THREE.Vector3(
@@ -347,215 +326,527 @@ export default class ThreeMap {
                     this.depth / 2
                 )
             } else {
-                // 没有指定中心点时，使用外环坐标计算重心
-                // 假设外环坐标为 feature.geometry.coordinates[0][0]
                 if (!feature.geometry.coordinates.length) {
                     return
                 }
                 const ring = feature.geometry.coordinates[0][0]
-                // 过滤出有效的点
                 const validPoints = ring.filter((pt) => pt && pt.length >= 2)
                 if (validPoints.length >= 3) {
-                    // 转换所有点
                     const convertedPoints = validPoints.map((pt) => {
-                        // 假设 customCoords.lngLatsToCoords 返回 [[x,y], ...]
                         return this.customCoords.lngLatsToCoords(pt)[0]
                     })
-                    // 计算重心
                     const [Cx, Cy] = this.computeCentroid(convertedPoints)
                     provinceCenter = new THREE.Vector3(Cx, Cy, this.depth / 2)
                 } else {
-                    // 备选方案：使用 Box3 计算中心
                     const center = new THREE.Vector3()
                     new THREE.Box3().setFromObject(province).getCenter(center)
                     provinceCenter = center
                 }
             }
-            // 保存计算后的中心坐标到属性中
             province.properties.compCenter = provinceCenter
-
-            // 标识该 Group 为地区块
             province.isProvince = true
-            // 添加区域到场景中
             this.scene.add(province)
             this.updateMeshCache()
         })
-        // 添加区域对应的文字标签
-
-        // 初始化地图容器
         this.creatCss2DLayer()
         this.initCss2DGroup()
     }
-
-    /**
-     * 创建地图块 Mesh 对象
-     * @param {THREE.Shape} shape - 地图块的二维形状
-     * @returns {THREE.Mesh} 返回构建好的 Mesh 对象
-     */
+    // 创建地图块
+    // createMesh 完整实现：浅蓝色渐变
     createMesh(shape) {
-        // 使用 ExtrudeGeometry 将二维形状挤出为三维体
-        const geometry = new THREE.ExtrudeGeometry(shape, {
-            depth: this.depth,
-            bevelEnabled: false,
-        })
-        // 使用 MeshStandardMaterial 创建材质
-        const material = new THREE.MeshStandardMaterial({
-            color: 0xffffff, // 地图块颜色
-            transparent: false,
-            opacity: 1,
-            metalness: 0.1, // 金属度
-            roughness: 0.5, // 粗糙度
-            side: THREE.DoubleSide, // 双面可见
-        })
-        // 创建渐变材质，使用 ShaderMaterial 实现自定义渐变效果
-        const vertexShader = `
-      varying float vHeight;
-      void main() {
-        vHeight = position.z;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `
-        const fragmentShader = `
-      uniform vec3 topColor;
-      uniform vec3 bottomColor;
-      uniform float offset;
-      uniform float exponent;
-      uniform float depth;
-      varying float vHeight;
-      void main() {
-        float h = clamp((vHeight - offset) / depth, 0.0, 1.0);
-        float t = smoothstep(0.0, 1.0, h);
-        vec3 color = mix(bottomColor, topColor, pow(t, exponent));
-        gl_FragColor = vec4(color, 1.0);
-      }
-    `
-        const sideMaterial = new THREE.ShaderMaterial({
-            uniforms: {
-                topColor: { value: new THREE.Color(0x3564b7) },
-                bottomColor: { value: new THREE.Color(0x85aeef) },
-                offset: { value: 0.0 },
-                exponent: { value: 1.0 },
-                depth: { value: this.depth },
-            },
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 1.0,
-        })
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: this.depth,
+        bevelEnabled: false,
+       
+      });
 
-        // 创建 Mesh 对象，材质数组中第一个材质用于顶面，第二个材质用于侧面
-        const mesh = new THREE.Mesh(geometry, [material, sideMaterial])
-        mesh.position.z = 0 // 设置地图块在 z 轴的位置
-        return mesh
-    }
-    /**
-     * 更新地图块的材质样式
-     * @param {Array} dataList 数据列表，每项至少包含 areaId 和 value 字段
-     * @param {Array} ranges 范围列表，每项包含 min, max, color 属性
-     * @param {string} defaultColor 默认颜色（例如 '#CCCCCC'）
-     */
-    updateMapStyles(
-        dataList = [],
-        ranges = [],
-        defaultColor = 'rgba(42,88,172,1)'
-    ) {
-        // 遍历所有已创建的地图块
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(this.config.areaColor),
+        transparent: false,
+        opacity: 1.0,
+        metalness: 0.1,
+        roughness: 0.1,
+        side: THREE.FrontSide,
+        toneMapped : true
+      });
+
+      const sideMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          color1: { value: new THREE.Color('#71c1dd') }, // 最深(1)
+          color2: { value: new THREE.Color('#3c78a7') }, // 中蓝(2)
+          color3: { value: new THREE.Color('#155472') }, // 浅蓝(3)
+          depth:  { value: this.depth },
+          offset: { value: 1 },
+          alpha:  { value: 0.8 },
+        },
+        vertexShader: `
+          varying float vHeight;
+          void main() {
+            vHeight = position.z;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 color1; // 1 步骤深
+          uniform vec3 color2; // 2 步骤中
+          uniform vec3 color3; // 3 步骤浅
+          uniform float depth;
+          uniform float offset;
+          uniform float alpha;
+          varying float vHeight;
+
+          void main() {
+            float h_raw = mod((vHeight - offset) / depth, 1.0);
+            vec3 col;
+            float w = 0.1;
+            float g = 0.02;
+            // 第一组 321 区间 [0,0.3]
+            if (h_raw < w + g) {
+              col = mix(color3, color2, smoothstep(0.0, w+g, h_raw));
+            } else if (h_raw < 3.0 * w + g) {
+              col = mix(color2, color1, smoothstep(w, 2.0*w+g, h_raw));
+            } else if (h_raw < 5.0 * w + g) {
+              col = color1;
+            }
+            // 第二组 321 区间 [0.3,0.6]
+            else if (h_raw < 3.0*w + g + w + g) {
+              float t = h_raw - (3.0*w + g);
+              col = mix(color3, color2, smoothstep(0.0, w+g, t));
+            } else if (h_raw < 3.0*w + g + 2.0*w+g) {
+              float t = h_raw - (3.0*w + g + w + g);
+              col = mix(color2, color1, smoothstep(0.0, w+g, t));
+            } else if (h_raw < 3.0*(w+g)) {
+              col = color1;
+            }
+            // 其余区间, 重复前 0.6 区
+            else {
+              float hh = mod(h_raw, 3.0*(w+g));
+              if (hh < w+g) {
+                col = mix(color3, color2, smoothstep(0.0, w+g, hh));
+              } else if (hh < 2.0*w+g) {
+                col = mix(color2, color1, smoothstep(w, 2.0*w+g, hh));
+              } else {
+                col = color1;
+              }
+            }
+            gl_FragColor = vec4(col, alpha);
+          }
+        `,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity:1,
+        blending: THREE.NormalBlending,
+        depthWrite:  false
+      });
+      const mats = [];
+      for (let i = 0; i < geometry.groups.length; i++) {
+        // 我们约定：只有组 1（侧面）用 sideMaterial，其他都用 material
+        mats.push(i === 1 ? sideMaterial : material);
+      }
+      const mesh = new THREE.Mesh(geometry, mats);
+      mesh.position.z = 0;
+
+      let tween = gsap.to(sideMaterial.uniforms.offset, {
+        value: this.depth,
+        duration: 6,
+        ease: 'linear',
+        repeat: -1,
+        onUpdate: () => sideMaterial.needsUpdate = true
+      });
+      this._tweens.push(tween)
+
+      return mesh;
+    }  
+    // 根据传入的数据，更新地图的样式
+    updateMapStyles(dataList, ranges, defaultColor = this.config.areaColor) { 
+        if(dataList.length==0){
+          this.cachedMeshes.forEach((mesh) => {
+            mesh.material[0].oldColor = this.createColorTexture(this.config.areaColor);
+            
+          })
+        }
         this.cachedMeshes.forEach((mesh) => {
-            // 从 mesh 的 properties 中获取 areaId
             const areaId = mesh.properties[this.config.idKey]
-
-            // 在数据列表中查找对应区域的数据
             const dataItem = dataList.find((item) => item.areaId == areaId)
-
-            // 根据数据中的 value 匹配范围，否则使用 defaultColor
             let fillColor
             if (dataItem) {
-                const matchedRange = ranges.find(
-                    (range) =>
-                        dataItem.value >= range.min &&
-                        dataItem.value <= range.max
-                )
+                // 优先匹配非 Infinity 的范围，采用 [min, max) 区间判断
+                let matchedRange = ranges.find((range) => {
+                    return range.max !== Infinity && dataItem.value >= range.min && dataItem.value < range.max
+                })
+                // 如果没有匹配到，再尝试匹配 max 为 Infinity 的范围
+                if (!matchedRange) {
+                    matchedRange = ranges.find((range) => {
+                        return range.max === Infinity && dataItem.value >= range.min
+                    })
+                }
                 fillColor = matchedRange ? matchedRange.color : defaultColor
             } else {
                 fillColor = defaultColor
             }
-
             // 将计算出来的区域颜色存储到 mesh 上，便于后续使用
             mesh.userData.fillColor = fillColor
-
-            // 计算 mesh 的包围盒及尺寸
             const box = new THREE.Box3().setFromObject(mesh)
             const size = new THREE.Vector3()
             box.getSize(size)
-
-            // 定义分辨率缩放因子
             const scale = 1
             let computedWidth = Math.ceil(size.x * scale)
             let computedHeight = Math.ceil(size.y * scale)
-
-            // 限制最大 canvas 尺寸
-            const maxDimension = 2048
+            const maxDimension = 1024
             const canvasWidth = Math.min(computedWidth, maxDimension)
             const canvasHeight = Math.min(computedHeight, maxDimension)
             if (canvasWidth <= 0 || canvasHeight <= 0) return
-
-            // 创建 canvas，并设置绘图缓冲区尺寸
             const canvas = document.createElement('canvas')
             canvas.width = canvasWidth
             canvas.height = canvasHeight
-
-            // 获取 2D 绘图上下文，并填充背景色
             let ctx = canvas.getContext('2d')
             ctx.fillStyle = fillColor
             ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-
-            // 创建 CanvasTexture，并应用到 mesh 顶面材质上
             const texture = new THREE.CanvasTexture(canvas)
             texture.needsUpdate = true
             if (mesh.material && Array.isArray(mesh.material)) {
                 mesh.material[0].map = texture
                 mesh.material[0].needsUpdate = true
+                mesh.material[0].oldColor = texture;
             } else if (mesh.material) {
-                mesh.material.map = texture
+                mesh.material.map = [texture]
                 mesh.material.needsUpdate = true
+                mesh.material[0].oldColor = texture;
             }
             ctx = null
         })
     }
+   /**
+     * 只渲染柱状、环、波纹、发光晕和 2D 标签
+     * @param {Array} dataList      // [{ areaId, value, … }]
+     * @param {Array} rangeColors   // [{min, max, color}, …]
+     */
+    createBarsAndRings(dataList, rangeColors = []) {
+      // 清理旧的
+      this.BarsGroup?.clear();
+      this.BarsGroup = new THREE.Group();
+      this._barLabel2D.forEach(label => this.css2DGroup.remove(label));
+      this._barLabel2D.length = 0;
+      this._tweens.length = 0;
+      if(dataList.length==0)return;
+      // 找到最大值
+      const maxItem = dataList.reduce((a, b) => a.value > b.value ? a : b, dataList[0]);
+      const maxProv = this.scene.children.find(g =>
+        g.isProvince && g.properties[this.config.idKey] == maxItem.areaId
+      );
+      if (!maxProv) return console.warn('找不到最大值省份', maxItem.areaId);
 
+      // 遍历每个数据项，渲染柱子、环、波纹、发光和标签
+      dataList.forEach(item => {
+        if (item.value <= 0) return;
+
+        // 当前省份组 & 中心
+        const prov = this.scene.children.find(g =>
+          g.isProvince && g.properties[this.config.idKey] == item.areaId
+        );
+        if (!prov) return;
+        const center = prov.properties.compCenter.clone();
+
+        // —— 根据 rangeColors 映射颜色 —— 
+        let colorStr = '#81ffff', opacity = 1;;
+        const range = rangeColors.find(r => item.value >= r.min && item.value < r.max)
+                    || rangeColors.find(r => r.max === Infinity && item.value >= r.min);
+        if (range) {
+          colorStr = range.color;
+          const m = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/);
+          if (m) {
+            colorStr = `rgb(${m[1]},${m[2]},${m[3]})`;
+            if (m[4] != null) opacity = parseFloat(m[4]);
+          }
+        }
+        const barColor = new THREE.Color(colorStr);
+
+        // —— 渐变贴图（下→上 同色）——
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = 1; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const grad = ctx.createLinearGradient(0, size, 0, 0);
+        grad.addColorStop(0, colorStr);
+        grad.addColorStop(1, colorStr);
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, 1, size);
+        const gradientTexture = new THREE.CanvasTexture(canvas);
+        gradientTexture.wrapS = THREE.ClampToEdgeWrapping;
+        gradientTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+        // —— 1. 柱体 —— 
+        const barW = this.depth * 0.2;
+        const barH = (item.value / maxItem.value) * this.depth * 5;
+        const regionTopZ = this.depth;
+        const barCenterZ = regionTopZ + barH / 2 + 0.01;
+        const barGeo = new THREE.CylinderGeometry(barW/2, barW/2, barH, 16);
+        barGeo.rotateX(Math.PI/2);
+        const barMat = new THREE.MeshStandardMaterial({
+          map:               gradientTexture,
+          color:             barColor,
+          emissive:          barColor,
+          emissiveIntensity: 1,
+          transparent:       true,
+          opacity:           0.8,
+          side:              THREE.FrontSide,
+        });
+        const bar = new THREE.Mesh(barGeo, barMat);
+        bar.position.set(center.x, center.y, barCenterZ);
+        bar.properties = { areaId: item.areaId };
+        this.BarsGroup.add(bar);
+
+        // —— 2. 发光晕 —— 
+        const glowGeo = barGeo.clone().scale(1.4, 1.2, 1);
+        const glowMat = new THREE.ShaderMaterial({
+          uniforms: {
+            viewVector: { value: this.camera.position.clone() },
+            c:          { value: 0.5 },
+            p:          { value: 2.0 },
+            glowColor:  { value: barColor },
+          },
+          vertexShader: `
+            uniform vec3 viewVector; uniform float c; uniform float p;
+            varying float intensity;
+            void main(){
+              vec3 vN = normalize(normalMatrix * normal);
+              vec3 vL = normalize(normalMatrix*viewVector
+                - (modelViewMatrix*vec4(position,1.0)).xyz);
+              intensity = pow(c - dot(vN, vL), p);
+              gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);
+            }`,
+          fragmentShader: `
+            uniform vec3 glowColor; varying float intensity;
+            void main(){ gl_FragColor = vec4(glowColor*intensity, intensity); }`,
+          side:        THREE.DoubleSide,
+          blending:    THREE.AdditiveBlending,
+          transparent: true,
+          depthWrite:  false,
+        });
+        bar.add(new THREE.Mesh(glowGeo, glowMat));
+
+        // —— 3. 环形效果 —— 
+        const barBottomZ = regionTopZ + 1000;
+        const outerInnerR = barW * 1.6;
+        const outerOuterR = barW * 1.8;
+        const innerInnerR = barW * 1;
+        const innerOuterR = barW * 1.4;
+        const radialSeg   = 64;
+        const gapAngle    = Math.PI / 30;
+        const segCount    = 3;
+        const segAngle    = (2 * Math.PI - segCount * gapAngle) / segCount;
+
+        const ringGroup = new THREE.Group();
+        ringGroup.position.set(center.x, center.y, barBottomZ);
+        this.BarsGroup.add(ringGroup);
+
+        // 3.1 外环（三段）
+        for (let i = 0; i < segCount; i++) {
+          const thetaStart = i * (segAngle + gapAngle);
+          const geo = new THREE.RingGeometry(
+            outerOuterR, outerInnerR, radialSeg, 1, thetaStart, segAngle
+          );
+          const mat = new THREE.MeshBasicMaterial({
+            color:       0xc2ffff,
+            transparent: true,
+            opacity:     0.6,
+            side:        THREE.DoubleSide,
+            depthWrite:  false,
+          });
+          const mesh = new THREE.Mesh(geo, mat);
+         
+          ringGroup.add(mesh);
+        }
+
+        // 3.2 内环（三段）
+        const innerGroup = new THREE.Group();
+        ringGroup.add(innerGroup);
+        for (let i = 0; i < segCount; i++) {
+          const thetaStart = i * (segAngle + gapAngle);
+          const geo = new THREE.RingGeometry(
+            innerInnerR, innerOuterR, radialSeg, 1, thetaStart, segAngle
+          );
+          const mat = new THREE.MeshBasicMaterial({
+            color:       0x7cf9f5,
+            transparent: true,
+            opacity:     0.8,
+            side:        THREE.DoubleSide,
+            depthWrite:  false,
+          });
+          const mesh = new THREE.Mesh(geo, mat);;
+       
+          innerGroup.add(mesh);
+        }
+        // 内环自转
+        const tween = gsap.to(innerGroup.rotation, {
+          z:        Math.PI * 2,
+          duration: 2,
+          ease:     'linear',
+          repeat:   -1,
+        });
+        this._tweens.push(tween);
+
+        // 3.3 最大值波纹
+        if (item.areaId === maxItem.areaId) {
+          const rippleInnerR = outerOuterR + barW * 0.2;
+          const rippleOuterR = rippleInnerR + barW * 0.2;
+          const rippleGeo = new THREE.RingGeometry(rippleInnerR, rippleOuterR, radialSeg);
+          const rippleMat = new THREE.MeshBasicMaterial({
+            color:       0xffffff,
+            transparent: true,
+            opacity:     0.5,
+            side:        THREE.DoubleSide,
+            depthWrite:  false,
+          });
+          const ripple = new THREE.Mesh(rippleGeo, rippleMat);
+          ringGroup.add(ripple);
+          gsap.timeline({ repeat: -1 })
+            .fromTo(ripple.scale,
+              { x: 1, y: 1, z: 1 },
+              { x: 1.5, y: 1.5, z: 1.5, duration: 0.6, ease: 'sine.out' }
+            )
+            .fromTo(rippleMat,
+              { opacity: 0.5 },
+              { opacity: 0, duration: 0.6, ease: 'sine.out',
+                onRepeat() { rippleMat.opacity = 0.5; } },
+              0
+            );
+        }
+
+        // —— 4. 2D 标签 —— 
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <strong class="bar-label-value">${item.value}</strong>
+          <span class="bar-label-name">${prov.properties.name}</span>
+        `;
+        div.style.pointerEvents = 'none';
+        div.className = 'bar-label';
+        const label2d = new CSS2DObject(div);
+        label2d.position.set(center.x, center.y, barCenterZ + barH/2 +this.depth/2);
+        this.css2DGroup.add(label2d);
+        this._barLabel2D.push(label2d);
+      });
+
+      this.scene.add(this.BarsGroup);
+    }
+    /**
+     * 只渲染飞线（底色管道 + 多段“亮片”）
+     * @param {Array} dataList  // [{ areaId, value, … }]
+     */
+    createFlightLines(dataList) {
+      // 清理旧的
+      this.flightGroup?.clear();
+      this._tweens.length = 0;
+
+      if(dataList.length==0)return;
+      // 找到最大值
+      const maxItem = dataList.reduce((a, b) => a.value > b.value ? a : b, dataList[0]);
+      const maxProv = this.scene.children.find(g =>
+        g.isProvince && g.properties[this.config.idKey] == maxItem.areaId
+      );
+      if (!maxProv) return console.warn('找不到最大值省份', maxItem.areaId);
+
+      // Shader 源
+      const tubeVS = `
+        varying vec2 vUv;
+        void main(){
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }`;
+      const tubeFS = `
+        uniform float time;
+        uniform float segments;
+        uniform float length;
+        uniform vec3 color;
+        varying vec2 vUv;
+        void main(){
+          float p = fract((vUv.x + time) * segments);
+          float d = abs(p - 0.5);
+          float alpha = smoothstep(length, 0.0, d);
+          gl_FragColor = vec4(color, alpha);
+        }`;
+
+      dataList.forEach(item => {
+        if (item.value <= 0 || item.areaId === maxItem.areaId) return;
+
+        const prov = this.scene.children.find(g =>
+          g.isProvince && g.properties[this.config.idKey] == item.areaId
+        );
+        if (!prov) return;
+        const center = prov.properties.compCenter.clone();
+
+        // 计算飞线三点
+        const start = new THREE.Vector3(
+          maxProv.properties.compCenter.x,
+          maxProv.properties.compCenter.y,
+          this.depth
+        );
+        const end = new THREE.Vector3(center.x, center.y, this.depth);
+        const mid = start.clone().lerp(end, 0.5);
+        mid.z += this.depth * 2;
+
+        // 1. 底色半透明管道
+        const curve = new THREE.CatmullRomCurve3([start, mid, end]);
+        const tubeGeo = new THREE.TubeGeometry(curve, 64, this.depth * 0.06, 16, false);
+        const baseMat = new THREE.MeshBasicMaterial({
+          color:       new THREE.Color(0xc2ffff),
+          transparent: true,
+          opacity:     0.4,
+          depthWrite:  false,
+        });
+        this.flightGroup.add(new THREE.Mesh(tubeGeo, baseMat));
+
+        // 2. 多段“亮片”飞线
+        const highMat = new THREE.ShaderMaterial({
+          uniforms: {
+            time:     { value: 0 },
+            segments: { value: 2 },
+            length:   { value: 0.1 },
+            color:    { value: new THREE.Color(0x7cf9f5) },
+          },
+          vertexShader:   tubeVS,
+          fragmentShader: tubeFS,
+          transparent:    true,
+          depthWrite:     false,
+        });
+        const highLine = new THREE.Mesh(tubeGeo.clone(), highMat);
+        this.flightGroup.add(highLine);
+        const tween = gsap.to(highMat.uniforms.time, {
+          value:    1,
+          duration: 3,
+          ease:     'linear',
+          repeat:   -1,
+        });
+        this._tweens.push(tween);
+      });
+
+      this.scene.add(this.flightGroup);
+    }
+
+
+
+  
+  // 场景中添加css2D元素的group
     initCss2DGroup() {
         this.css2DGroup = new THREE.Group()
         this.scene.add(this.css2DGroup)
     }
-
-    /**
-     * 创建地图的渲染图层，用来渲染额外的效果 文字，热力图 tooltip等
-     */
+    // 创建CSS2DLayer,用展示文字，就是在地图的上方添加一层layer层，文字会渲染上去
     creatCss2DLayer() {
-        // 创建 CSS2DRenderer 对象，作为渲染器来更新 DOM 元素位置
         this.CSS2DLayer = new CSS2DRenderer()
-        // 设置渲染器尺寸与容器尺寸一致
         this.CSS2DLayer.setSize(this.innerWidth, this.innerHeight)
-        // 注意：position 属性应设置为 'absolute' 而不是 'r'
         this.CSS2DLayer.domElement.style.position = 'absolute'
         this.CSS2DLayer.domElement.style.left = '0px'
         this.CSS2DLayer.domElement.style.top = '0px'
-        this.CSS2DLayer.domElement.style.pointerEvents = 'none' // 禁止鼠标事件
-        // 将 CSS2DRenderer 的 DOM 元素添加到地图容器中
+        this.CSS2DLayer.domElement.style.pointerEvents = 'none'
         this.dom.appendChild(this.CSS2DLayer.domElement)
     }
-    /**
-     * 清空this.CSS2DLayer
-     */
+    // 清空CSS2DLayer
     clearCss2DLayer() {
-        // 移除 group 内所有对象
         if (this.css2DGroup) {
             while (this.css2DGroup.children.length > 0) {
                 this.css2DGroup.remove(this.css2DGroup.children[0])
             }
         }
-        // 清空 CSS2DRenderer DOM 同上
         while (this.CSS2DLayer.domElement.firstChild) {
             this.CSS2DLayer.domElement.removeChild(
                 this.CSS2DLayer.domElement.firstChild
@@ -566,41 +857,29 @@ export default class ThreeMap {
                 this.CSS2DLayer.domElement
             )
         }
+        
+        console.log('清空CSS2DLayer')
     }
-
-    /**
-     * 处理鼠标移动事件：更新鼠标悬浮的地图块和文字的高亮状态
-     * @param {MouseEvent} event
-     */
-
+    // 鼠标移动事件
     handleMouseMove(event) {
         const obj = this.initRay(event)
-        // 每次移动时先重置悬浮样式
         this.hoverReset()
-        //创建tooltip
-
         this.createTooltip(obj)
         if (obj) {
-            const currentMesh:any = obj.object 
-            // 记录悬浮区域 id
-            this.hoverId = currentMesh.parent.properties[this.config.idKey]
-            // 设置选中样式
+            const currentMesh = obj.object
+            this.hoverId = currentMesh.properties[this.config.idKey]
             this.setSelectArea(this.hoverId)
+            
         } else {
             this.hoverId = ''
         }
     }
-    /**
-     * 处理鼠标移出事件，重置悬浮样式
-     * @param {MouseEvent} event
-     */
+    // 清空hover状态移出后
     handleMouseOut(event) {
         this.hoverReset()
         this.hoverId = ''
     }
-    /**
-     * 移除tooltip
-     */
+    // 移出提示框，只能有一个存在
     removeTooltip() {
         if (this.tooltip) {
             this.scene.remove(this.tooltip)
@@ -609,7 +888,6 @@ export default class ThreeMap {
                     this.tooltip.element
                 )
             }
-            // 同时从 css2DGroup 中移除
             if (
                 this.css2DGroup &&
                 this.css2DGroup.children.includes(this.tooltip)
@@ -619,187 +897,221 @@ export default class ThreeMap {
             this.tooltip = null
         }
     }
-
-    /**
-     * 处理鼠标点击事件，调用外部传入的点击处理回调
-     * @param {MouseEvent} event
-     * @param {Function} handler 外部点击处理函数
-     */
+    // 点击事件
     handleMouseClick(event, handler) {
         const obj = this.initRay(event)
         if (obj) {
-            const currentMesh:any = obj.object
+            const currentMesh = obj.object
             const properties = currentMesh.parent.properties
             handler && handler(properties)
         }
     }
-
-    /**
-     * 获取所有地区块对应的 Mesh 列表（过滤线和文字）
-     * @returns {Array} 包含 Mesh 对象的数组
-     */
-    getAreaList(): any {
+    // 获取渲染区域列表
+    getAreaList() {
         return this.scene.children
-            .filter((item: any) => item.isProvince)
+            .filter((item) => item.isProvince)
             .map((item) => item.children)
             .flat()
             .filter((item) => item.type == 'Mesh')
     }
-
-    /**
-     * 获取所有 3D 文字标签列表
-     * @returns {Array} 包含 CSS2DObject 的数组
-     */
+    // 获取渲染文本列表
     getTextList() {
-        return this.scene.children.filter((item:any) => item.isTextNode)
+        return this.scene.children.filter((item) => item.isTextNode)
     }
-    /**
-     * 创建一个单色的 CanvasTexture
-     * @param {string} color - 填充颜色，例如 '#ff0000'
-     * @param {number} width - 纹理宽度（默认256）
-     * @param {number} height - 纹理高度（默认256）
-     * @returns {THREE.CanvasTexture} 返回一个 CanvasTexture 对象
-     */
+    // 创建颜色纹理，用于填充选中的块，可修改为自定义渲染，
     createColorTexture(color, width = 256, height = 256) {
-        // 创建 canvas 并设置分辨率
         const canvas = document.createElement('canvas')
         canvas.width = width
         canvas.height = height
         const ctx = canvas.getContext('2d')
-        // 填充整个 canvas 为指定颜色
         ctx.fillStyle = color
         ctx.fillRect(0, 0, width, height)
-        // 创建纹理
         const texture = new THREE.CanvasTexture(canvas)
         texture.needsUpdate = true
         return texture
     }
-
-    /**
-     * 设置选中区域的样式（高亮）
-     * @param {string} curId 当前选中区域的 id
-     */
-    setSelectArea(curId) {
-        this.getAreaList().forEach((item) => {
-            let id = item.properties[this.config.idKey]
-            if (id == curId) {
-                // 保存原始颜色
-                item.material[0].oldColor = item.material[0].map.clone()
-                // 设置高亮颜色
-                item.material[0].map = this.createColorTexture(
-                    this.config.areaHoverColor
-                )
-                if (!item.originalScale) {
-                    item.originalScale = item.scale.clone()
-                }
-                // 增加高度，比如放大 20%（也可以调整为其他比例）
-                item.scale.z = item.originalScale.z * 1.4
-            }
-        })
-
-        this.textLabels.forEach((item: any) => {
-            let id = item.properties[this.config.idKey]
-
-            if (id == curId) {
-                // 保存原始文字颜色
-                item.oldColor = item.element.style.color
-                // 设置文字颜色为白色
-                item.element.style.color = this.config.labelHoverColor
-            }
-        })
-        this.textMeshGroup.forEach((item) => {
-            let id = item.properties[this.config.idKey]
-
-            if (id == curId) {
-                item.oldPosition = item.position.clone()
-                item.oldColor = item.material.color.clone()
-                item.material.color.set(this.config.labelHoverColor)
-                item.position.z += 10000
-            }
-        })
+// 选中区域
+// 鼠标悬浮时调用
+setSelectArea(curId) {
+  
+  // 区域高度与纹理处理
+  this.getAreaList().forEach(item => {
+    const id = item.properties[this.config.idKey];
+    if (item._prevHover) {
+      item.material.forEach(mat => {
+        if (mat.emissive) mat.emissiveIntensity = 0;
+        mat.needsUpdate = true;
+      });
+      item._prevHover = false;
     }
-    /**
-     * 重置悬浮状态，恢复之前高亮的地图块和文字颜色
-     */
-    hoverReset() {
-        const meshes = this.getAreaList() // 地图块 Mesh
-        const textList = this.getTextList() // 文字标签
-        if (this.hoverId) {
-            // 恢复地图块颜色
-            meshes.forEach((item) => {
-                let id = item.properties[this.config.idKey]
-                if (id == this.hoverId) {
-                    item.material[0].map.copy(item.material[0].oldColor) // 恢复原来的颜色
-                    // 如果保存了原始 scale，则恢复 scale
-                    if (item.originalScale) {
-                        item.scale.copy(item.originalScale)
-                    }
-                }
-            })
-            // 恢复文字颜色
-            this.textLabels.forEach((item: any) => {
-                let id = item.properties[this.config.idKey]
-                if (id == this.hoverId) {
-                    item.element.style.color = item.oldColor
-                }
-            })
-            this.textMeshGroup.forEach((item) => {
-                let id = item.properties[this.config.idKey]
-                if (id == this.hoverId) {
-                    item.position.copy(item.oldPosition)
-                    item.material.color.copy(item.oldColor)
-                }
-            })
+    if (id == curId) {
+      // 记录原始 scale
+      if (!item.originalScale) item.originalScale = item.scale.clone();
+      // 停止已有高度动画
+      item._hoverTween?.kill();
+      // 高度过渡
+      if(this.config.hoverHeight){
+        item._hoverTween = gsap.to(item.scale, {
+          z: item.originalScale.z * 1.2,
+          duration: 0.5,
+          ease: 'power2.out'
+        });
+      }
+      this._tweens.push(item._hoverTween)
+       // 发光高亮
+       item.material.forEach(mat => {
+        if (mat.emissive) {
+          mat.emissive = new THREE.Color(this.config.areaHoverColor);
+          mat.emissiveIntensity = 0.7;
+          mat.needsUpdate = true;
+        } else {
+          mat.opacity = 0.8;
+          mat.transparent = true;
+          mat.needsUpdate = true;
         }
-        return { meshes, textList }
+      });
+      item._prevHover = true;
+      // 保留原有颜色切换
+      item.material[0].oldColor = item.material[0].map?.clone();
+      item.material[0].map = this.createColorTexture(this.config.areaHoverColor);
+      item.material[0].needsUpdate = true;
     }
 
-    /**
-     * 创建区域文字标签，使用 CSS2DRenderer 渲染 DOM 文本
-     * CSS2DRenderer 会将所有通过 CSS2DObject 添加的 DOM 元素统一放在同一个容器中，渲染顺序通常按照它们在 scene 中添加的先后顺序决定。
-     * 因此，在添加 CSS2DObject 时，确保它们的添加顺序与你希望它们在屏幕上渲染的顺序一致。 !!!重点
-     */
+  });
+
+  // 2D 标签颜色
+  this.textLabels.forEach(item => {
+    const id = item.properties[this.config.idKey];
+    if (id == curId) {
+      item.oldColor = item.element.style.color;
+      item.element.style.color = this.config.labelHoverColor;
+    }
+  });
+
+  // 3D 文本颜色与位置动画
+  this.textMeshGroup.forEach(item => {
+    const id = item.properties[this.config.idKey];
+    if (id == curId) {
+      // 初次记录原始位置与颜色
+      if (!item.originalPosition) item.originalPosition = item.position.clone();
+      if (!item.oldColor) item.oldColor = item.material.color.clone();
+      // 停止已有动画
+      item._posTween?.kill();
+      item._colorTween?.kill();
+      // 获取对应 mesh
+      const mesh = this.getAreaList().find(m => m.properties[this.config.idKey] == curId);
+      // 计算 offset（基于 depth）
+      const offset = item.originalPosition.z - (mesh.originalScale.z * this.depth);
+      // 目标 z 为 mesh 新的高度（depth * scale.z）+ offset
+      const targetZ = mesh.scale.z * (this.depth+1)+ offset;
+      item._posTween = gsap.to(item.position, {
+        z: targetZ,
+        duration: 0.5,
+        ease: 'power2.out'
+      });
+      // 颜色过渡
+      const labelColor = new THREE.Color(this.config.labelHoverColor);
+      item._colorTween = gsap.to(item.material.color, {
+        r: labelColor.r,
+        g: labelColor.g,
+        b: labelColor.b,
+        duration: 0.5,
+        ease: 'power1.out',
+        onUpdate: () => { item.material.needsUpdate = true; }
+      });
+      this._tweens.push(item._posTween)
+      this._tweens.push(item._colorTween)
+    }
+  });
+
+}
+
+  // 鼠标移出时调用，恢复原始状态
+  hoverReset() {
+    // 恢复区域高度和纹理
+    this.getAreaList().forEach(item => {
+      item._hoverTween?.kill();
+      const baseZ = item.originalScale ? item.originalScale.z : 1;
+      item._hoverTween = gsap.to(item.scale, {
+        z: baseZ,
+        duration: 0.5,
+        ease: 'power2.out'
+      });
+      // 取消发光
+      if (item._prevHover) {
+        item.material.forEach(mat => {
+          if (mat.emissive) {
+            mat.emissive.setHex(0x000000);
+            mat.emissiveIntensity = 0;
+          } else {
+            mat.opacity = 1.0;
+          }
+          mat.needsUpdate = true;
+        });
+        item._prevHover = false;
+      }
+      if (item.material[0].oldColor) {
+        item.material[0].map = item.material[0].oldColor;
+        item.material[0].needsUpdate = true;
+      }
+    });
+
+    // 恢复 2D 标签颜色
+    this.textLabels.forEach(item => {
+      const id = item.properties[this.config.idKey];
+      if (id == this.hoverId && item.oldColor) {
+        item.element.style.color = item.oldColor;
+      }
+    });
+
+    // 恢复 3D 文本位置与颜色
+    this.textMeshGroup.forEach(item => {
+      const id = item.properties[this.config.idKey];
+      if (id != this.hoverId) {
+        item._posTween?.kill();
+        item._colorTween?.kill();
+        if (item.originalPosition) item.position.copy(item.originalPosition);
+        if (item.oldColor) item.material.color.copy(item.oldColor);
+      }
+    });
+  }
+  // 创建label
     createText() {
-        if (this.config.labelType === '2d') {
-            const list = this.scene.children.filter(
-                (item: any) => item.isProvince
-            )
-            list.forEach((item: any) => {
-                const { name, compCenter } = item.properties
-                let textDiv
-                if (
-                    this.config.createLabelElement &&
-                    typeof this.config.createLabelElement === 'function'
-                ) {
-                    // 用户自定义创建标签，传入区域名称和中心位置，要求返回一个 HTMLElement
-                    textDiv = this.config.createLabelElement(item.properties)
-                } else {
-                    // 默认创建 2d 标签
-                    textDiv = document.createElement('div')
-                    textDiv.style.color = '#A1C3DD'
-                    textDiv.style.fontSize = '12px'
-                    textDiv.style.position = 'absolute'
-                    textDiv.textContent = name
-                }
-                const textLabel = new CSS2DObject(textDiv) as any
-                textLabel.position.copy(compCenter)
-                textLabel.position.z += Math.floor(this.depth / 2)
-                textLabel.properties = item.properties
-                textLabel.isTextNode = true
-                this.css2DGroup.add(textLabel)
-                this.textLabels.push(textLabel)
-            })
-            this.textLabels.forEach((label: any) => {
-                this.CSS2DLayer.domElement.insertBefore(
-                    label.element,
-                    this.CSS2DLayer.domElement.firstChild
-                )
-            })
-        }
-        // 如果 labelType 为 '3d'，这里可以保持原有逻辑
-        if (this.config.labelType == '3d') {
+      if(!this.config.showLabel){
+        return
+      }
+      if (this.config.labelType === '2d') {
+        const list = this.scene.children.filter(item => item.isProvince);
+        list.forEach(item => {
+          const { name, compCenter } = item.properties;
+          let textDiv;
+          if (this.config.createLabelElement && typeof this.config.createLabelElement === 'function') {
+            // 用户自定义创建标签，传入区域名称和中心位置，要求返回一个 HTMLElement
+            textDiv = this.config.createLabelElement(item.properties);
+          } else {
+            // 默认创建 2d 标签
+            textDiv = document.createElement('div');
+            textDiv.style.color = '#A1C3DD';
+            textDiv.style.fontSize = '12px';
+            textDiv.style.position = 'absolute';
+            textDiv.textContent = name;
+          }
+          const textLabel = new CSS2DObject(textDiv);
+          textLabel.position.copy(compCenter);
+          textLabel.position.z += Math.floor(this.depth / 2);
+          textLabel.properties = item.properties;
+          textLabel.isTextNode = true;
+          this.css2DGroup.add(textLabel);
+          this.textLabels.push(textLabel);
+        });
+        // 必须使用insertBefore，否则会导致文字显示在地图下方
+        this.textLabels.forEach(label => {
+          this.CSS2DLayer.domElement.insertBefore(label.element, this.CSS2DLayer.domElement.firstChild);
+        });
+      }
+      if (this.config.labelType == '3d') {
             const loader = new FontLoader()
-            const font = loader.parse(fontData as any)
+            const font = loader.parse(fontData)
             this.cachedMeshes.map((item) => {
                 const { name, compCenter } = item.properties
                 const textGeometry = new TextGeometry(name, {
@@ -813,7 +1125,7 @@ export default class ThreeMap {
                     depthWrite: true,
                 })
                 textGeometry.center()
-                const textMesh: any = new THREE.Mesh(textGeometry, material)
+                const textMesh = new THREE.Mesh(textGeometry, material)
                 const [x, y] = item.properties.compCenter
                 textMesh.rotation.x = Math.PI / 2
                 textMesh.name = item.properties.name
@@ -824,63 +1136,45 @@ export default class ThreeMap {
                 this.textMeshGroup.push(textMesh)
                 this.scene.add(textMesh)
             })
-        }
+      }
     }
-
-    /**
-     * 创建区域轮廓线对象
-     * @param {Array} vertices - 顶点数组，包含线的所有顶点
-     * @returns {THREE.Line2} 返回构建好的轮廓线对象
-     */
+    // 创建线
     createLine(vertices) {
         if (vertices.length === 0) {
             console.error('Vertices array is empty')
             return
         }
-        // 使用 LineGeometry 创建线的几何体
         const lineGeometry = new LineGeometry()
-        lineGeometry.setPositions(vertices)
-        // 创建 LineMaterial，可设置线宽
+        lineGeometry.setPositions(vertices);
         const lineMaterial = new LineMaterial({
             color: new THREE.Color(this.config.lineColor).getHex(),
             linewidth: this.config.lineWidth,
             resolution: new THREE.Vector2(this.innerWidth, this.innerHeight),
         })
-        // 使用 Line2 构造可设置线宽的线对象
         const line = new Line2(lineGeometry, lineMaterial)
         line.computeLineDistances()
         return line
     }
-    /**
-     * 创建 tooltip，对外暴露一个配置接口，
-     * 用户可以通过 this.config.createTooltipElement 自定义 tooltip DOM 的创建，
-     * 参数可以传入区域名称、位置等信息，返回一个 DOM 元素。
-     */
+    // 创建提示信息
     createTooltip(obj) {
+        this.removeTooltip()
         if (!this.config.showTooltip) return
         if (obj) {
-            // 计算 tooltip 新位置，避免累加偏移
+          
             const newPos = obj.point.clone()
-            newPos.z = this.depth * 3
-
-            // 从当前 mesh 获取 tooltip 数据，比如名称
+            // 控制地图上下位置
+            newPos.z = this.depth * (this.config.tooltipHeight);
             const currentMesh = obj.object
             const { name } = currentMesh.parent.properties
-
             let tooltipElement
-            // 如果用户通过配置传入了 createTooltipElement 回调，则调用它
             if (
                 this.config.createTooltipElement &&
                 typeof this.config.createTooltipElement === 'function'
             ) {
-                // 用户可以自行设计 tooltip 元素，函数参数可自行定制
                 tooltipElement = this.config.createTooltipElement(
-                    name,
-                    newPos,
-                    obj
+                    currentMesh.properties
                 )
             } else {
-                // 默认创建 tooltip DOM
                 tooltipElement = document.createElement('div')
                 tooltipElement.style.background = 'rgba(255, 255, 255, 1)'
                 tooltipElement.style.color = '#1E87FC'
@@ -906,8 +1200,6 @@ export default class ThreeMap {
                 tooltipElement.appendChild(labelSpan)
                 tooltipElement.appendChild(valueSpan)
             }
-
-            // 如果 tooltip 已经存在，则更新其位置和内容
             if (this.tooltip) {
                 this.tooltip.position.copy(newPos)
                 if (!this.config.createTooltipElement) {
@@ -918,11 +1210,9 @@ export default class ThreeMap {
                     }
                 }
             } else {
-                // 创建新的 CSS2DObject 包裹 tooltipElement
-                const tooltipLabel:any = new CSS2DObject(tooltipElement)
+                const tooltipLabel = new CSS2DObject(tooltipElement)
                 tooltipLabel.position.copy(newPos)
                 tooltipLabel.isTooltip = true
-                // 添加到 css2DGroup 和 CSS2DRenderer 的 DOM 中（确保顺序在最上层）
                 this.css2DGroup.add(tooltipLabel)
                 this.CSS2DLayer.domElement.insertBefore(
                     tooltipLabel.element,
@@ -931,143 +1221,154 @@ export default class ThreeMap {
                 this.tooltip = tooltipLabel
             }
         } else {
-            // 如果 obj 不存在，则移除 tooltip
             this.removeTooltip()
         }
     }
     // loadRoundMap 整个区域的地图
     loadAllMap(mapRoundJson) {
-        const shape = new THREE.Shape()
-        const coordinates = mapRoundJson.features[0].geometry.coordinates[0][0]
-        const [x, y] = this.customCoords.lngLatsToCoords(coordinates[0])[0]
-        shape.moveTo(x, y)
-        coordinates.forEach((coord, index) => {
-            if (index > 0) {
-                const [x, y] = this.customCoords.lngLatsToCoords(coord)[0]
-                shape.lineTo(x, y)
-            }
-        })
-        shape.closePath()
-        return shape
+      const shape = new THREE.Shape()
+      const coordinates = mapRoundJson.features[0].geometry.coordinates[0][0]
+      const [x, y] = this.customCoords.lngLatsToCoords(coordinates[0])[0]
+      shape.moveTo(x, y)
+      coordinates.forEach((coord, index) => {
+        if (index > 0) {
+          const [x, y] = this.customCoords.lngLatsToCoords(coord)[0]
+          shape.lineTo(x, y)
+        }
+      })
+      shape.closePath()
+      return shape
     }
-    // 实现思路是，创建一个和地图一样大小的一个shape，然后将热力图渲染成一个贴图，然后贴到这个shape上面，shape放在地图表面
+   /**
+    * 渲染热力图到 Three.js 场景中。
+    * 
+    * @param {Object} roundJson - 包含地图外圈数据的 JSON 对象，用于生成地图形状。
+    * @param {Object} heatData - 热力图数据对象，包含 `data` 数组和 `max` 值。
+    * @param {Object} heatConfig - 热力图配置对象，包含 `radius`、`maxOpacity`、`minOpacity`、`blur` 和 `gradient` 等配置项。
+    */
     renderHeatmaps(roundJson: any, heatData: HeatData, heatConfig: HeatConfig) {
-        // 检查数据是否为空
-        if (!heatData || !heatData.data || heatData.data.length === 0) {
-            console.warn('No heatmap data provided.')
-            return
+        if (!heatData?.data?.length&&this._heatmapMesh) {
+          if (this._heatmapMesh) {
+            // 顶面贴图清空
+            const topMat = this._heatmapMesh.material[0];
+            topMat.map = null;
+            topMat.opacity = 0;
+            topMat.needsUpdate = true;
+            // 侧面已经是透明的，就不用管了
+          }
+          return;
         }
         // 1. 根据地图外圈数据生成全局形状（必须与地图形状一致）
-        const mapShape = this.loadAllMap(roundJson)
-
+        const mapShape = this.loadAllMap(roundJson);
+        
         // 2. 使用 mapShape 生成 THREE.ExtrudeGeometry（替代平面几何），并设置挤出深度
         const extrudeSettings = {
-            depth: 1, // 热力图层的厚度，可根据需求调整
-            bevelEnabled: false,
-        }
-        const geometry = new THREE.ExtrudeGeometry(mapShape, extrudeSettings)
-
+          depth: 1, // 热力图层的厚度，可根据需求调整
+          bevelEnabled: false
+        };
+        const geometry = new THREE.ExtrudeGeometry(mapShape, extrudeSettings);
+        
         // 3. 计算几何体的包围盒，作为热力图数据归一化参考
-        const bbox = new THREE.Box3().setFromObject(new THREE.Mesh(geometry))
-        const size = bbox.getSize(new THREE.Vector3())
-
+        const bbox = new THREE.Box3().setFromObject(new THREE.Mesh(geometry));
+        const size = bbox.getSize(new THREE.Vector3());
+        
         // 限制最大 canvas 尺寸
-        const maxDimension = 1024
-        const canvasWidth = Math.min(Math.ceil(size.x), maxDimension)
-        const canvasHeight = Math.min(Math.ceil(size.y), maxDimension)
-        if (canvasWidth <= 0 || canvasHeight <= 0) return
-
+        const maxDimension = 1024;
+        const canvasWidth = Math.min(Math.ceil(size.x), maxDimension);
+        const canvasHeight = Math.min(Math.ceil(size.y), maxDimension);
+        // 若 canvas 宽高不合法则终止函数执行
+        if (canvasWidth <= 0 || canvasHeight <= 0) return;
+        
         // 4. 创建一个隐藏的 DOM 容器供 heatmap.js 渲染
-        const container = document.createElement('div')
-        container.style.width = canvasWidth + 'px'
-        container.style.height = canvasHeight + 'px'
-        container.style.display = 'none'
-        document.body.appendChild(container)
-
+        const container = document.createElement("div");
+        container.style.width = canvasWidth + "px";
+        container.style.height = canvasHeight + "px";
+        container.style.display = "none";
+        document.body.appendChild(container);
+        
         // 5. 计算 bbox 宽高，用于将热力图数据点归一化到容器内
-        const widthBox = bbox.max.x - bbox.min.x
-        const heightBox = bbox.max.y - bbox.min.y
-        const pointsInMap = []
-        heatData.data.forEach((pt) => {
-            const coords = this.customCoords.lngLatsToCoords([
-                [pt.lng, pt.lat],
-            ])[0]
-            const ptVec = new THREE.Vector3(coords[0], coords[1], bbox.max.z)
-            if (bbox.containsPoint(ptVec)) {
-                const relativeX =
-                    ((ptVec.x - bbox.min.x) / widthBox) * canvasWidth
-                const relativeY =
-                    ((ptVec.y - bbox.min.y) / heightBox) * canvasHeight
-                pointsInMap.push({
-                    x: Math.floor(relativeX),
-                    y: Math.floor(relativeY),
-                    value: pt.value,
-                })
-            }
-        })
-
+        const widthBox = bbox.max.x - bbox.min.x;
+        const heightBox = bbox.max.y - bbox.min.y;
+        const pointsInMap = [];
+        // 遍历热力图数据，将经纬度转换为容器内的相对坐标
+        console.log(heatData)
+        heatData.data?.forEach(pt => {
+          const coords = this.customCoords.lngLatsToCoords([[pt.lng, pt.lat]])[0];
+          const ptVec = new THREE.Vector3(coords[0], coords[1], bbox.max.z);
+          // 检查点是否在包围盒内
+          if (bbox.containsPoint(ptVec)) {
+            const relativeX = ((ptVec.x - bbox.min.x) / widthBox) * canvasWidth;
+            const relativeY = ((ptVec.y - bbox.min.y) / heightBox) * canvasHeight;
+            pointsInMap.push({
+              x: Math.floor(relativeX),
+              y: Math.floor(relativeY),
+              value: pt.value
+            });
+          }
+        });
+        
         // 6. 使用 heatmap.js 创建热力图实例
-        const h337 = (window as any).h337
-        const heatmapInstance = h337.create({
-            container: container,
-            width: canvasWidth,
-            height: canvasHeight,
-            radius: heatConfig?.radius || 50,
-            maxOpacity: heatConfig?.maxOpacity || 1,
-            minOpacity: heatConfig?.minOpacity || 1,
-            blur: heatConfig?.blur || 1,
-            gradient: heatConfig?.gradient || {
-                '.10': 'blue',
-                '.30': 'cyan',
-                '.40': 'lime',
-                '.50': 'yellow',
-                '.95': 'red',
-            },
-        })
+        let heatmapInstance = h337.create({
+          container: container,
+          width: canvasWidth,
+          height: canvasHeight,
+          radius: heatConfig.radius || 50,
+          maxOpacity: heatConfig.maxOpacity || 1,
+          minOpacity: heatConfig.minOpacity || 1,
+          blur: heatConfig.blur || 1,
+          gradient: heatConfig.gradient || {
+            ".10": "blue",
+            ".30": "cyan",
+            ".40": "lime",
+            ".50": "yellow",
+            ".95": "red"
+          }
+        });
+        // 设置热力图数据
         heatmapInstance.setData({
-            max: heatData.max,
-            data: pointsInMap,
-        })
-
+          max: heatData.max,
+          data: pointsInMap
+        });
+        
         // 7. 获取 heatmap.js 内部的 canvas，并创建 THREE.CanvasTexture
-        const heatmapCanvas = heatmapInstance._renderer.canvas
-        const texture = new THREE.CanvasTexture(heatmapCanvas)
-        texture.needsUpdate = true
-
+        const heatmapCanvas = heatmapInstance._renderer.canvas;
+        const texture = new THREE.CanvasTexture(heatmapCanvas);
+        texture.needsUpdate = true;
+        
         // 8. 分别创建顶部和侧边材质
         const topMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            transparent: true,
-            opacity: 1.0,
-            side: THREE.FrontSide,
-        })
+          map: texture,
+          transparent: true,
+          opacity: 1.0,
+          side: THREE.FrontSide
+        });
         // 侧边设为全透明
         const sideMaterial = new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0,
-            side: THREE.DoubleSide,
-        })
-
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide
+        });
+        
         // 使用两个材质构建 Mesh，数组顺序须与几何体的组顺序一致
-        const heatmapMesh = new THREE.Mesh(geometry, [
-            topMaterial,
-            sideMaterial,
-        ])
-        this.changeUv(heatmapMesh.geometry)
-        // 9. 将热力图层放置在整体区域中心，z 坐标根据需求调整（这里用 this.depth*1.2）
-        const center = bbox.getCenter(new THREE.Vector3())
-        heatmapMesh.position.set(0, 0, this.depth * 1.05)
-        heatmapMesh.renderOrder = 999 // 确保在地图上方渲染
-
+        const heatmapMesh = new THREE.Mesh(geometry, [topMaterial, sideMaterial]);
+        // 调整 UV 坐标
+        this.changeUv(heatmapMesh.geometry);
+        // 9. 将热力图层放置在整体区域中心，z 坐标根据需求调整（这里用 this.depth*1.05）
+        const center = bbox.getCenter(new THREE.Vector3());
+        heatmapMesh.position.set(0, 0, this.depth * 1.05);
+        // 确保热力图在地图上方渲染
+        heatmapMesh.renderOrder = 999; 
+        
         // 10. 添加到场景中
-        this.scene.add(heatmapMesh)
-
+        this._heatmapMesh = heatmapMesh;
+        this.scene.add(heatmapMesh);
+        
         // 11. 添加辅助对象显示该层的边界（便于调试）
-        // const helper = new THREE.BoxHelper(heatmapMesh, 0xff0000)
-        // this.scene.add(helper)
-
+        // const helper = new THREE.BoxHelper(heatmapMesh, 0xff0000);
+        // this.scene.add(helper);
+        
         // 12. 清理临时容器
-        document.body.removeChild(container)
+        document.body.removeChild(container);
     }
 
     changeUv(geometry) {
@@ -1080,46 +1381,37 @@ export default class ThreeMap {
             const y = positions.getY(i)
             const u = (x - bbox.min.x) / size.x
             const v = (y - bbox.min.y) / size.y
-
             uvs.setXY(i, u, v)
         }
         geometry.attributes.uv.needsUpdate = true
     }
 
-    /**
-     * 清除当前地图绘制的区域和文字标签
-     */
     clear() {
-        // 移除 CSS2DRenderer 的 DOM 元素
         if (this.CSS2DLayer) {
             this.CSS2DLayer.domElement.remove()
             this.CSS2DLayer = null
         }
-        // 移除所有文字标签的 DOM 元素
         if (this.textLabels.length) {
-            this.textLabels.forEach((label:any) => {
+            this.textLabels.forEach((label) => {
                 label.element.remove()
             })
             this.textLabels = []
         }
-        // 移除所有区域 Mesh 和文字标签
         if (this.textMeshGroup.length) {
             this.textMeshGroup.forEach((item) => {
                 this.scene.remove(item)
             })
             this.textMeshGroup = []
         }
-        // 将灯光重置到初始位置
-        this.scene.children.forEach((item: any) => {
+        this.scene.children.forEach((item) => {
             if (item.isLight) {
                 this.initLightPosition(item)
             }
         })
-        // 移除场景中所有非灯光对象
         if (this.scene && this.scene.children) {
             let i = this.scene.children.length
             while (i--) {
-                const item: any = this.scene.children[i]
+                const item = this.scene.children[i]
                 if (!item.isLight) {
                     this.scene.remove(item)
                 }
@@ -1127,179 +1419,8 @@ export default class ThreeMap {
         }
     }
 
-    /**
-     * 持续不断地从各区域生成数据流动效果，流向济南市
-     * @param {number} duration - 每个小球沿曲线运动的时长（秒），默认 3 秒
-     * @param {number} heightOffset - 曲线中控制点在 z 轴上的偏移量（决定弧度），默认 10
-     * @param {number} spawnInterval - 每个区域生成数据流小球的时间间隔（毫秒），默认 1000 毫秒
-     */
-    startContinuousDataFlowToJinan(
-        duration = 8,
-        heightOffset = this.depth * 4,
-        spawnInterval = 2000
-    ) {
-        // 获取所有区域块（这里使用缓存的 mesh 列表）
-        const areas = this.cachedMeshes
-        // 查找济南市区域块（要求 properties.name 为 '济南市'）
-        const jinanArea = areas.find(
-            (area) => area.properties && area.properties.name === '济南市'
-        )
-        if (!jinanArea) {
-            console.warn('未找到济南市的区域块')
-            return
-        }
-        // 获取济南市的中心坐标（假设存储在 properties.compCenter 中）
-        const jinanPos = jinanArea.properties.compCenter || new THREE.Vector3()
-        const that = this
-
-        // 用于存储各区域的定时器，便于后续停止动画
-        this.dataFlowIntervals = []
-
-        // 遍历除济南市外的其他区域
-        areas.forEach((area) => {
-            if (area.properties && area.properties.name !== '济南市') {
-                // 每个区域设置一个定时器，持续生成数据流效果
-                const timer = setInterval(() => {
-                    // 取当前区域的中心坐标作为起点（要求预先计算并存入 properties.compCenter）
-                    const startPos =
-                        area.properties.compCenter || new THREE.Vector3()
-
-                    // 计算控制点：起点与济南市中心的中点，并在 z 轴上增加偏移，形成弧线
-                    const midPos = startPos
-                        .clone()
-                        .add(jinanPos)
-                        .multiplyScalar(0.5)
-                    midPos.z += heightOffset
-
-                    // 构造二次贝塞尔曲线
-                    const curve = new THREE.QuadraticBezierCurve3(
-                        startPos,
-                        midPos,
-                        jinanPos
-                    )
-
-                    // 获取曲线上的采样点
-                    const curvePoints = curve.getPoints(50)
-
-                    // 使用 LineGeometry 生成几何体，这里需要把 THREE.Vector3 数组转换为扁平数组
-                    const positions = []
-                    curvePoints.forEach((point) => {
-                        positions.push(point.x, point.y, point.z)
-                    })
-                    const curveGeometry = new LineGeometry()
-                    curveGeometry.setPositions(positions)
-
-                    // 使用 LineMaterial 创建材质，设置金属感颜色和半透明属性
-                    const curveMaterial = new LineMaterial({
-                        color: 0x00ff00, // 金属感的基础颜色
-                        linewidth: 2, // 线宽（单位为像素，需要根据设备分辨率设置）
-                        transparent: true,
-                        opacity: 1,
-                        // 如果需要进一步实现模糊效果，可以自定义 Shader 或配合后处理
-                    })
-
-                    // 必须设置分辨率，用于计算线宽（这里以窗口尺寸为例）
-                    curveMaterial.resolution.set(
-                        window.innerWidth,
-                        window.innerHeight
-                    )
-
-                    // 使用 Line2 对象创建线条（Line2 支持自定义线宽）
-                    const flowLine = new Line2(curveGeometry, curveMaterial)
-                    flowLine.computeLineDistances() // 计算线段距离用于虚线等效果（如果需要）
-
-                    this.scene.add(flowLine)
-
-                    // 创建一个小球作为数据流载体
-                    const sphereGeo = new THREE.SphereGeometry(
-                        that.depth * 0.15,
-                        16,
-                        16
-                    )
-
-                    // 定义顶点着色器：传递顶点坐标给片元着色器
-                    const sphereVertexShader = `
-                    varying vec3 vPosition;
-                    void main() {
-                      vPosition = position;
-                      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                  `
-
-                    // 定义片元着色器：根据 x 坐标实现从左到右的颜色插值
-                    const sphereFragmentShader = `
-                    uniform vec3 leftColor;
-                    uniform vec3 rightColor;
-                    uniform float sphereRadius;
-                    varying vec3 vPosition;
-                    void main() {
-                      // 计算 x 方向的插值系数：将坐标范围 [-sphereRadius, sphereRadius] 映射到 [0, 1]
-                      float t = clamp((vPosition.x + sphereRadius) / (2.0 * sphereRadius), 0.0, 1.0);
-                      vec3 color = mix(leftColor, rightColor, t);
-                      gl_FragColor = vec4(color, 1.0);
-                    }
-                  `
-
-                    // 创建 ShaderMaterial 材质，并设置 uniform 参数
-                    const sphereMat = new THREE.ShaderMaterial({
-                        uniforms: {
-                            leftColor: { value: new THREE.Color(0xff5700) }, // 左侧颜色：红色
-                            rightColor: { value: new THREE.Color(0xffef00) }, // 右侧颜色：白色
-                            sphereRadius: { value: that.depth * 0.2 }, // 半径值，用于映射 x 坐标
-                        },
-                        vertexShader: sphereVertexShader,
-                        fragmentShader: sphereFragmentShader,
-                        transparent: true,
-                    })
-
-                    // 创建小球 Mesh 并设置初始位置
-                    const dataSphere = new THREE.Mesh(sphereGeo, sphereMat)
-                    dataSphere.position.copy(startPos)
-                    dataSphere.scale.set(1, 0.2, 1)
-                    that.scene.add(dataSphere)
-
-                    // 利用 gsap 动画让小球沿曲线运动
-                    gsap.to(
-                        { t: 0 },
-                        {
-                            t: 1,
-                            duration: duration,
-                            ease: 'power2.inOut',
-                            onUpdate: function () {
-                                const point = curve.getPoint(
-                                    this.targets()[0].t
-                                )
-                                dataSphere.position.copy(point)
-                            },
-                            onComplete: function () {
-                                // 动画完成后移除小球和曲线路径
-                                that.scene.remove(dataSphere)
-                                that.scene.remove(flowLine)
-                            },
-                        }
-                    )
-                }, spawnInterval)
-                // 保存定时器，便于后续清理
-                that.dataFlowIntervals.push(timer)
-            }
-        })
-    }
-
-    /**
-     * 停止持续的数据流动效果，清除所有定时器
-     */
-    stopContinuousDataFlow() {
-        if (this.dataFlowIntervals && this.dataFlowIntervals.length) {
-            this.dataFlowIntervals.forEach((timer) => clearInterval(timer))
-            this.dataFlowIntervals = []
-        }
-    }
-
-    /**
-     * resize 方法：更新 DOM 容器尺寸和相机参数
-     */
     resize() {
-        this.setDomRect() // 更新容器尺寸信息
+        this.setDomRect()
         if (this.renderer) {
             this.renderer.setSize(this.innerWidth, this.innerHeight)
         }
@@ -1309,48 +1430,39 @@ export default class ThreeMap {
         }
     }
 
-    /**
-     * 销毁方法，清理所有资源，释放内存
-     */
     destroy() {
         this.clear()
-        // 清理场景中的所有对象
+        this._tweens.forEach(tween => {
+            tween.kill()
+        })
         if (this.scene) {
             while (this.scene.children.length > 0) {
                 this.scene.remove(this.scene.children[0])
             }
             this.scene = null
         }
-        // 清理渲染器
         if (this.renderer) {
             this.renderer.dispose()
             this.renderer.forceContextLoss()
             this.renderer = null
         }
-        // 清理相机
         if (this.camera) {
             this.camera = null
         }
-        // 清理其他资源
         this.raycaster = null
         this.mouse = null
         this.hoveredMesh = null
         this.hoveredText = null
-
-        // 强制释放 WebGL 上下文
-        if (this.dom && this.dom.getContext) {
-            const gl = this.dom.getContext('webgl')
+        const canvas = this.dom as HTMLCanvasElement
+        if (canvas && canvas.getContext) {
+            const gl = canvas.getContext('webgl')
             if (gl) {
-                gl.getExtension('WEBGL_lose_context')?.loseContext()
+                gl.getExtension('WEBGL_lose_context') &&
+                    gl.getExtension('WEBGL_lose_context').loseContext()
             }
         }
     }
 
-    /**
-     * 计算多边形面积，采用经典公式
-     * @param {Array} points - 数组，每个元素为 [x, y]
-     * @returns {number} 返回多边形面积
-     */
     computePolygonArea(points) {
         let area = 0
         const n = points.length
@@ -1362,13 +1474,6 @@ export default class ThreeMap {
         return Math.abs(area / 2)
     }
 
-    /**
-     * 根据过滤规则过滤 feature 数据
-     * 过滤掉无效坐标和面积过小的区域
-     * @param {Array} features - GeoJSON features 数组
-     * @param {number} minArea - 最小面积阈值
-     * @returns {Object} 返回过滤后的数据对象，格式为 { features: [...] }
-     */
     filterFeatures(features, minArea = 0.1) {
         const filteredFeatures = features
             .map((feature) => {
@@ -1378,11 +1483,9 @@ export default class ThreeMap {
                     let coordinatesItem = coordinates[j]
                     let newCoordinatesItem = []
                     for (let k = 0; k < coordinatesItem.length; k++) {
-                        // 过滤掉无效坐标点
                         let validRing = coordinatesItem[k].filter((item) => {
                             return item && item.length && item[0] && item[1]
                         })
-                        // 至少需要三个点才能计算面积
                         if (validRing.length >= 3) {
                             const area = this.computePolygonArea(validRing)
                             if (area >= minArea) {
@@ -1401,11 +1504,7 @@ export default class ThreeMap {
 
         return { features: filteredFeatures }
     }
-    /**
-     * 计算多边形的重心（质心）
-     * @param {Array} points - 数组，每个元素为 [x, y]
-     * @returns {Array} 返回 [Cx, Cy]
-     */
+
     computeCentroid(points) {
         let area = 0,
             Cx = 0,

@@ -6,6 +6,7 @@ import ThreeMap from './ThreeMap'
 import { markRaw } from 'vue'
 import heatData from './heatData'
 import shandongRound from './shandongRound.json'
+
 /**
  * useCommonMap 组合式函数,主要处理的是高德地图的事件，ThreeMap是处理高德地图上的3D地图
  *
@@ -304,14 +305,14 @@ export function useCommonMap(
                 })
             })
         })
-        if (allPoints.length > 0) {
+        if (allPoints.length > 0 && mapObject.value) {
             const centerPolygon = new AMap.Polygon({
                 path: allPoints,
-                visible: true,
+                visible: false,
             })
             mapObject.value.setFitView([centerPolygon], true)
             mapObject.value.setZoom(
-                props.level >= 1 ? props.zoom + 1 : props.zoom
+                props.level >= 1 ? props.zoom + 2 : props.zoom
             )
             mapObject.value.remove([centerPolygon])
         }
@@ -350,13 +351,8 @@ export function useCommonMap(
                     threeMapObject.value.createText()
                     threeMapObject.value.updateMapStyles(
                         props.dataArray,
-                        props.rangeList
-                    )
-                    // 数据流动效果
-                    // threeMapObject.value.startContinuousDataFlowToJinan()
-                    threeMapObject.value.renderHeatmaps(
-                        roundData.value || shandongRound,
-                        heatData
+                        props.rangeList,
+                        props.threeConfig?.areaColor
                     )
                     threeMapObject.value.resize()
                 },
@@ -390,11 +386,8 @@ export function useCommonMap(
             threeMapObject.value.createText()
             threeMapObject.value.updateMapStyles(
                 props.dataArray,
-                props.rangeList
-            )
-            threeMapObject.value.renderHeatmaps(
-                roundData.value || shandongRound,
-                heatData
+                props.rangeList,
+                props.threeConfig?.areaColor
             )
         }
     }
@@ -422,6 +415,34 @@ export function useCommonMap(
         console.log('resize')
         threeMapObject.value && threeMapObject.value.resize()
     }
+
+    watch(
+        () => props.rangeList,
+        () => {
+            if (threeMapObject.value) {
+                threeMapObject.value.updateMapStyles(
+                    props.dataArray || [],
+                    props.rangeList || [],
+                    props.threeConfig?.areaColor
+                )
+            }
+        },
+        { deep: true }
+    )
+
+    watch(
+        () => props.dataArray,
+        () => {
+            if (threeMapObject.value) {
+                threeMapObject.value.updateMapStyles(
+                    props.dataArray || [],
+                    props.rangeList || [],
+                    props.threeConfig?.areaColor
+                )
+            }
+        },
+        { deep: true }
+    )
 
     // 组件挂载时：获取 DOM 并初始化地图、反缩放等
     onMounted(() => {
