@@ -11,6 +11,9 @@
     "flags": [
     ]
   },
+    "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   // Silent the stylistic rules in you IDE, but still auto fix them
   "eslint.rules.customizations": [
     // { "rule": "@stylistic/*", "severity": "off" },
@@ -52,6 +55,27 @@
     "pcss",
     "postcss"
   ],
+   "auto-close-tag.activationOnLanguage": [
+    "xml",
+    "php",
+    "blade",
+    "ejs",
+    "jinja",
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "plaintext",
+    "markdown",
+    "vue",
+    "liquid",
+    "erb",
+    "lang-cfml",
+    "cfml",
+    "HTML (EEx)",
+    "HTML (Eex)",
+    "plist"
+  ],
   "prettier.enable": true,
   /**
    * 解决 unocss @apply 警告问题
@@ -64,5 +88,6 @@
     "postcss",
     "less"
   ],
-  "svn.ignoreMissingSvnWarning": true
+  "svn.ignoreMissingSvnWarning": true,
+  "emmet.useInlineCompletions": true
 }

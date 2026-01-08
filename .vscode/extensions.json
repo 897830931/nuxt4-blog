@@ -6,6 +6,7 @@
     "csstools.postcss",
     "dbaeumer.vscode-eslint",
     "vue.volar",
-    "formulahendry.auto-close-tag"
+    "formulahendry.auto-close-tag",
+    "formulahendry.auto-complete-tag"
   ]
 }
