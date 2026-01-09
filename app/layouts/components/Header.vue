@@ -7,65 +7,31 @@
                 <div class="bg-[url('@/assets/img/layouts/logo.png')] bg-no-repeat my-auto bg-cover rounded-full w-10 aspect-[1/1] sm:w-16" />
             </div>
             <div class="title hidden md:flex font-title text-3xl font-bold">南瓜时光机</div>
-            <el-menu
-                background-color="transparent"
-                default-active="2"
-                class="el-menu-vertical-demo"
-                :collapse="isCollapse"
-                :mode="menuMode"
-            >
-                <template
-                    v-for="menu in menuData"
-                    :key="menu.index"
-                >
-                    <el-sub-menu
-                        v-if="menu.subItems && menu.subItems.length > 0"
-                        :index="menu.index"
-                    >
-                        <template #title>
-                            <div
-                                class="flex flex-nowrap"
-                                @click="navigateTo(menu.path)"
-                            >
-                                <component
-                                    :is="menu.icon"
-                                    class="icon-size md:mr-1"
-                                />
+            <el-menu background-color="transparent" default-active="2" class="el-menu-vertical-demo" :collapse="isCollapse" :mode="menuMode">
+                <templat v-for="menu in menuData" :key="menu.index">
+                    <el-sub-menu v-if="menu.subItems && menu.subItems.length > 0" :index="menu.index">
+                       <template #title>
+                            <div class="flex flex-nowrap" @click="navigateTo(menu.path)">
+                                <component :is="menu.icon" class="icon-size md:mr-1" />
                                 <span>{{ menu.title }}</span>
                             </div>
                         </template>
-
-                        <template
-                            v-for="group in menu.subItems"
-                            :key="group.groupTitle"
-                        >
+                        <template v-for="group in menu.subItems" :key="group.groupTitle">
                             <el-menu-item-group>
                                 <template #title
                                     ><span>{{ group.groupTitle }}</span>
                                 </template>
-                                <el-menu-item
-                                    v-for="item in group.items"
-                                    :key="item.index"
-                                    :index="item.index"
-                                    @click="navigateTo(item.path)"
-                                >
+                                <el-menu-item v-for="item in group.items" :key="item.index" :index="item.index" @click="navigateTo(item.path)">
                                     {{ item.title }}
                                 </el-menu-item>
                             </el-menu-item-group>
                         </template>
                     </el-sub-menu>
-                    <el-menu-item
-                        v-else
-                        :index="menu.index"
-                        @click="navigateTo(menu.path)"
-                    >
-                        <component
-                            :is="menu.icon"
-                            class="icon-size md:mr-1"
-                        />
+                    <el-menu-item v-else :index="menu.index" @click="navigateTo(menu.path)">
+                        <component :is="menu.icon" class="icon-size md:mr-1" />
                         <span>{{ menu.title }}</span>
                     </el-menu-item>
-                </template>
+                </templat>
             </el-menu>
         </div>
     </div>
@@ -144,9 +110,9 @@ const navigateTo = (path: string | null) => {
         letter-spacing: 0.3rem;
         background-image: -webkit-linear-gradient(left, #147b96, #e6d205 25%, #147b96 50%, #e6d205 75%, #147b96);
         -webkit-text-fill-color: transparent;
-        -webkit-background-clip: text;
-        -webkit-background-size: 200% 100%;
-        -webkit-animation: maskedAnimation 4s infinite linear;
+        background-clip: text;
+        background-size: 200% 100%;
+        animation: maskedAnimation 4s infinite linear;
     }
 
     @keyframes maskedAnimation {

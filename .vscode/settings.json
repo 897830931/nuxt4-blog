@@ -6,12 +6,12 @@
     "source.organizeImports": "never"
   },
   // Disable the default formatter
-  "editor.formatOnSave": false,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "eslint.options": {
-    "flags": [
-    ]
+    "flags": []
   },
-    "[vue]": {
+  "[vue]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   // Silent the stylistic rules in you IDE, but still auto fix them
@@ -55,7 +55,7 @@
     "pcss",
     "postcss"
   ],
-   "auto-close-tag.activationOnLanguage": [
+  "auto-close-tag.activationOnLanguage": [
     "xml",
     "php",
     "blade",
@@ -82,12 +82,7 @@
    * @see https://github.com/tailwindlabs/tailwindcss/discussions/5258#discussioncomment-1979394
    */
   "scss.lint.unknownAtRules": "ignore",
-  "stylelint.validate": [
-    "css",
-    "scss",
-    "postcss",
-    "less"
-  ],
+  "stylelint.validate": ["css", "scss", "postcss", "less"],
   "svn.ignoreMissingSvnWarning": true,
   "emmet.useInlineCompletions": true
 }

@@ -26,11 +26,7 @@ onMounted(() => {
     <div>
         <div class="main px-2 py-1">
             <div class="atricle-list grid grid-cols-1 gap-1">
-                <Article
-                    v-for="item in list"
-                    :key="item.id"
-                    :info="item"
-                />
+                <Article v-for="item in list" :key="item.id" :info="item" />
             </div>
         </div>
     </div>
