@@ -8,12 +8,12 @@
             </div>
             <div class="title hidden md:flex font-title text-3xl font-bold">南瓜时光机</div>
             <el-menu background-color="transparent" default-active="2" class="el-menu-vertical-demo" :collapse="isCollapse" :mode="menuMode">
-                <templat v-for="menu in menuData" :key="menu.index">
+                <template v-for="menu in menuData" :key="menu.index">
                     <el-sub-menu v-if="menu.subItems && menu.subItems.length > 0" :index="menu.index">
-                       <template #title>
-                            <div class="flex flex-nowrap" @click="navigateTo(menu.path)">
+                        <template #title>
+                            <div class="flex flex-nowrap items-center" @click="navigateTo(menu.path)">
                                 <component :is="menu.icon" class="icon-size md:mr-1" />
-                                <span>{{ menu.title }}</span>
+                                <span v-if="!isCollapse">{{ menu.title }}</span>
                             </div>
                         </template>
                         <template v-for="group in menu.subItems" :key="group.groupTitle">
@@ -31,7 +31,7 @@
                         <component :is="menu.icon" class="icon-size md:mr-1" />
                         <span>{{ menu.title }}</span>
                     </el-menu-item>
-                </templat>
+                </template>
             </el-menu>
         </div>
     </div>
@@ -40,8 +40,8 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { VideoCameraFilled, HomeFilled, Notebook, InfoFilled, CollectionTag } from '@element-plus/icons-vue'
-const isCollapse = ref(true)
-const menuMode = ref<any>('vertical') // 默认为垂直模式
+const isCollapse = ref(false)
+const menuMode = ref<any>('horizontal') // 默认为垂直模式
 const router = useRouter()
 // 动态改变菜单折叠模式
 function updateMenuMode() {

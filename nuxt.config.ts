@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { selectProxyTarget } from './proxy-selector'
 import { resolve } from 'path'
-let proxyUrl = 'http://39.106.64.68:7002' // 默认生产
+let proxyUrl = 'http://localhost:7002' // 默认生产
 // const isDev = process.env.NODE_ENV === 'development'
 // if (isDev) {
 //     // 动态注入：启动时选择
@@ -14,7 +14,7 @@ export default defineNuxtConfig({
         port: 8090,
     },
     dir: {
-      app: 'app'
+        app: 'app',
     },
     compatibilityDate: '2025-11-18',
     // 这些键仅在服务器端可用 配置属性是响应式的
@@ -23,9 +23,7 @@ export default defineNuxtConfig({
         // apiSecret: '',
 
         // 公开给浏览器端（相当于旧的 publicRuntimeConfig）
-        public: {
-           
-        },
+        public: {},
     },
     appConfig: {
         name: 'Pumpkin',
@@ -61,15 +59,15 @@ export default defineNuxtConfig({
             ],
             style: [],
             script: [
-                    {
-                      src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
-                      type: 'text/javascript',
-                  },
-                  {
-                      src: '/js/heatmap.js',
-                      type: 'text/javascript',
-                  },
-              ],
+                {
+                    src: 'https://webapi.amap.com/maps?v=2.0&key=a9d64fef4b0e48a1774fc274c998d35e&plugin=AMap.GeoJSON,AMap.CustomLayer,AMap.Heatmap',
+                    type: 'text/javascript',
+                },
+                {
+                    src: '/js/heatmap.js',
+                    type: 'text/javascript',
+                },
+            ],
             noscript: [],
         },
         keepalive: true,
@@ -134,7 +132,6 @@ export default defineNuxtConfig({
         analyze: {
             analyzerMode: 'static',
         },
-        
     },
     // ==================== Vite 终极打包优化 ====================
     vite: {
@@ -150,7 +147,7 @@ export default defineNuxtConfig({
                 port: 8090,
             },
         },
-        
+
         // 2. 构建优化（最重要！）
         build: {
             emptyOutDir: true,
@@ -174,7 +171,6 @@ export default defineNuxtConfig({
                                     return chunkName
                                 }
                             }
-                            
                         }
                     },
                 },
@@ -221,7 +217,7 @@ export default defineNuxtConfig({
         },
     },
     // 全局引入的css文件
-    css: ['element-plus/dist/index.css','@/assets/css/global.css'],
+    css: ['element-plus/dist/index.css', '@/assets/css/global.css'],
     // 根据不同环境配置通
     $development: {},
     $production: {
